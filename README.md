@@ -1,5 +1,7 @@
 # From Graphics to World Models
 
+By **Bruce.Z@LiftAI**
+
 **How models of the world help robots predict, act, and learn.**
 
 A rendered scene tells us what the world looks like. A robot needs to know what will happen when it acts: whether a grasp will hold, a push will move an object, or a connector will catch on an edge. This book follows the path from scene representations to world models that can guide decisions and learning.
