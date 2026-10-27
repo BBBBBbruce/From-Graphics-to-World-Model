@@ -1,0 +1,94 @@
+% !TEX root = ../main.tex
+\chapter{Choosing Your First Research Direction}
+\label{ch:directions}
+
+A policy chooses actions; dynamics predicts consequences; rewards define what matters. Independent evidence tests whether an update improves behavior. Your next step is to choose one failure in this chain and make it measurable.
+
+Start with a system whose inputs, commands, and outcomes you understand. Increase complexity when the simple experiment can no longer answer your question.
+
+\section{A complete experiment on a laptop}
+The repository includes \texttt{examples/one\_dimensional\_world.py}. It models a one-dimensional slider with a command deadband. Here $s_t$ is position in metres and $a_t$ is a requested displacement in metres over a fixed control interval. The setting $\kappa\geq0$ is a deadband width in metres: commands whose magnitude does not exceed it produce no motion. Define $\operatorname{sign}(a)$ to be $-1$, 0, or 1 according to whether $a$ is negative, zero, or positive. The transition is
+\begin{equation}
+ s_{t+1}=s_t+\operatorname{sign}(a_t)\max(|a_t|-\kappa,0).
+ \label{eq:toy-transition}
+\end{equation}
+This is a deliberately simple response law. It has no velocity state, inertia, collisions, or faithful friction/contact solver. Position is sufficient for its transition because we defined a system with no hidden velocity dependence. The purpose is to study model error and decisions under a known transition, not to simulate a real contact mechanism.
+
+\begin{figure}[htbp]\centering
+\input{figures/deadband}
+\caption{The toy action response. Small commands leave the slider still; larger commands move it after subtracting the deadband. Increasing the deadband changes the action consequence while preserving the same command units.}
+\label{fig:deadband}
+\end{figure}
+
+The experiment generates 400 independent one-step training examples with positions between 0.1 and 0.9 metres, actions between $-0.1$ and $0.1$ metres, and $\kappa=0.02$ metres. Training next-position measurements receive independent uniform noise between $-0.003$ and $0.003$ metres. The dynamics used for evaluation are noise-free, so model error can be measured against known state rather than noisy observations. This privileged reference is available because the system is synthetic.
+
+Three predictors use the same training budget. Persistence predicts no movement. A linear predictor fits one gain multiplying the action. A deadband predictor searches a prespecified grid of possible widths, from 0 to 0.06 metres in increments of 0.001 metres, and selects the width with lowest training squared error. It has the correct family of response laws for this toy world. That favorable modeling assumption must be stated when interpreting its result.
+
+Test the fitted predictors on two separately generated sets of 200 examples: the original width 0.02 and a shifted width 0.04. The training data contain only the original width. Test examples use distinct random-number streams, and neither test set selects the fitted parameter. The second test therefore asks about a specified change in physical conditions, not merely new random examples from the same condition.
+
+\subsection{Prediction and decision metrics}
+The first metric is mean absolute next-position error, in metres. The second asks which action the model chooses. For each initial position, a target $g$ is sampled within 0.06 metres. The model evaluates the same 41 candidate actions from $-0.1$ to $0.1$ metres in increments of 0.005 metres and selects the one with smallest predicted distance to the target. Ties prefer smaller command magnitude, then the smaller signed command. All predictors use this rule.
+
+For this one-step task, reward is negative absolute distance to the target after execution. A decision succeeds if that distance is at most 0.004 metres. Reference values are computed by applying every candidate to the known toy transition. Selection regret is the reference value of the best candidate minus that of the selected candidate, as in Equation~\eqref{eq:middle-regret}. We can measure this counterfactual quantity here because the simulator supplies outcomes for all candidates. An ordinary recording of one action would not.
+
+The program writes the seed, data counts, settings, fitted parameters, prediction error, decision regret, and success counts. It does not retrain on the shifted test set. Run it from the repository root:
+\begin{quote}\ttfamily\small
+python3 examples/one\_dimensional\_world.py --output results/toy
+\end{quote}
+Then run the checks:
+\begin{quote}\ttfamily\small
+python3 -m unittest discover -s tests -v
+\end{quote}
+The exact default results are saved in \texttt{docs/toy-results.json}. They are outputs of this toy program. The tests check response-law boundaries, parameter recovery in a noiseless example, reproducibility, and regret semantics; they do not validate a robot controller.
+
+\subsection{Read the failure before changing the model}
+First compare persistence with the fitted predictors. Next compare the original and shifted conditions for each predictor. A fitted width close to 0.02 is expected to describe the original condition better than 0.04. A loss of decision quality under the shift is evidence that the assumed response law or condition has become inaccurate. It does not, by itself, motivate a larger policy optimizer.
+
+Now consider what would let the model adapt. If the current width is measured, include it as a dynamics input and train across several widths. If it is hidden but constant within an episode, earlier action--response pairs may help estimate it. These pairs would form physical context $C_{\mathrm{dyn}}$, distinct from the demonstration context $C$ that specifies the task. If the width changes without any observable clue, the model should represent uncertainty or obtain new evidence; it cannot infer an arbitrary hidden change with certainty.
+
+The current example consists of independent one-step cases. Studying identification from history requires a new multi-step dataset with condition-consistent episodes and a split that keeps episodes separate. Merely passing random old examples into a history encoder would not establish that they describe the present slider.
+
+\section{Match a direction to a question}
+Choose the question first, then the smallest experiment that could answer it. The following directions extend the book's running problems. They are proposals, not claims of novel contributions or guaranteed publication opportunities.
+
+\begin{table}[htbp]\centering\small
+\caption{Research entry points with a measurable first result.}
+\begin{tabularx}{\linewidth}{@{}p{26mm}YY@{}}\toprule
+Interest & First question & Evidence to collect\\\midrule
+Graphics and geometry & Does compression erase the feature that changes the action choice? & Paired reconstructions and action ranking near small alignment changes.\\
+Control and dynamics & Can short interaction history identify a hidden response setting? & Held-out episodes with known settings, including changes between episodes.\\
+Generative modeling & Does a stochastic predictor preserve several valid futures without accepting impossible ones? & Multiple reference realizations and independent physical constraints.\\
+Robot learning & Does imagined data improve a fixed baseline at a matched observed-data budget? & Baseline/candidate behavior on held-out configurations, with all attempts counted.\\
+Evaluation & Can a scorer distinguish visible success from verified functional success? & Independently labeled outcomes, uncertain cases, and full confusion counts.\\
+Optimization & Does an update help when model and scorer are held fixed? & Matched training data and budget, numerical checks, and external behavior evaluation.\\\bottomrule
+\end{tabularx}
+\end{table}
+
+For a graphics-oriented reader, the first direction is a natural bridge. Begin with known geometry and a few camera positions. Introduce a small alignment change that reverses the preferred action. Compare whether images, reconstructed geometry, and compressed latents preserve that change. A lower image loss is useful evidence only if the relevant distinction survives. NeRF and Gaussian Splatting provide representation references, while Chapter~\ref{ch:engineering} explains why contact requires an additional transition model~\citep{nerf,gaussians}.
+
+For a control-oriented reader, the toy deadband is a starting point for system identification: inferring the response law from inputs and outputs. Ask how many interactions distinguish two settings, whether the chosen actions reveal the difference, and whether estimation improves later decisions. A useful action can both pursue the goal and expose uncertainty. Establish this in a transparent simulator before using a costly visual predictor.
+
+For an evaluation-oriented reader, construct a small set of outcomes whose labels require different evidence. A cup can look held while resting on a support; a connector can look seated without electrical continuity. State what each sensor can establish. Evaluate false accepted successes and missed true successes separately. The result may be a clear measurement limitation rather than a new model, and that limitation can prevent misleading learning claims.
+
+Only choose the optimization direction after the targets are credible. If every failed grasp is labeled successful, a better optimizer may learn the wrong behavior faster. Compare a simple filtering baseline with a more complex update under the same data and scorer. If the complex method helps, investigate which change caused it; do not change the dynamics, data budget, and optimizer simultaneously and attribute the difference to the optimizer alone.
+
+\section{A two-week first pass}
+Use days one through three for Chapters~\ref{ch:foundations} and \ref{ch:policy}. Explain execution, sampling, and training without looking at the text. Run the toy example and verify one transition by hand.
+
+On days four through six, read Chapter~\ref{ch:story}'s world-model and reward sections. Trace one return calculation and a prediction error that changes an action choice. Postpone the optional derivations until reward, value, and advantage are clear.
+
+On days seven through nine, use Chapter~\ref{ch:engineering} to write an action schema and an input-availability table. Choose one extension: condition shift, hidden settings, reduced observations, or representation error. Fix the baseline and budget.
+
+On days ten through twelve, use Chapter~\ref{ch:evaluation} to specify the claim, independent unit, split, metric, and failure criterion before running the final test. Inspect individual failures as well as averages.
+
+Use the final two days to report the question, assumptions, method, results with counts and units, a limitation, and the next experiment. Read one relevant primary paper and map its inputs, objective, and evidence onto the same template. Completing this learning path does not establish research novelty.
+
+\section{What a defensible first result looks like}
+A useful statement is narrow: ``On 200 held-out one-step cases with the specified command grid and shifted deadband, this fitted predictor changed decision regret by this amount relative to this baseline.'' It names a population and a comparison. A stronger claim about general robot manipulation would require different evidence.
+
+Before scaling up, reproduce the result and explain one success and one failure. Identify the missing observation or assumption responsible. That gives you a reason to pursue the next experiment.
+
+\section{Exercises}
+\exercise{deadband}{Starting at 0.5 metres with $\kappa=0.02$ metres, compute the next position for actions 0.01, 0.05, and $-0.05$ metres. Which of these reveals that the response is not a simple unit-gain displacement?}
+\exercise{project}{Propose an extension that estimates a hidden deadband from history. Define an episode, the available inputs, the held-out split, a baseline, and one outcome that would count against your hypothesis.}
+\FloatBarrier

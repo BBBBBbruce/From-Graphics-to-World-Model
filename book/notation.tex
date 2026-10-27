@@ -1,0 +1,146 @@
+% !TEX root = main.tex
+\chapter*{Symbols and Conventions}
+\label{front:notation}
+\addcontentsline{toc}{chapter}{Symbols and Conventions}
+\markboth{Symbols and Conventions}{}
+
+The notation below applies to the book's equations and original diagrams. Each new quantity is also defined where it enters the argument. All illustrations are original teaching diagrams; they use the same notation as the text.
+
+An unadorned observation is measured; a hat marks a prediction or estimate. A tilde marks a constructed surrogate or adjusted quantity. The subscript \textnormal{old} means evaluation at a fixed behavior-policy snapshot. A bar over critic parameters marks a fixed target copy. Bold $\mathbf a$ always means an action chunk, while $a$ means one action, which can itself be a vector. Bold attention and mechanics symbols distinguish matrices or vectors from scalar learning quantities.
+
+\section*{Interaction, context, and time}
+\begin{longtable}{@{}p{40mm}p{116mm}@{}}
+\toprule Symbol & Meaning\\\midrule\endhead
+$t$ & Integer control-step index. A local imagined rollout starts at $t=0$.\\
+$t_{\mathrm{phys},t},\ \Delta t$ & Physical timestamp of step $t$ and duration of one control interval. These have units of time.\\
+$s_t,\ o_t,\ \widehat o_t$ & Full physical state, measured observation, and predicted observation.\\
+$h_t,\ \widehat h_t$ & Available observation--action history; an imagined history starts with real evidence and then appends generated transitions.\\
+$a_t,\ \mathbf a_t$ & One action and a proposed chunk of consecutive actions. Replanning may replace the unexecuted part of a chunk.\\
+$H,\ d_a,\ K$ & Number of actions in a chunk, dimension of one action, and number executed before replanning; $K\leq H$.\\
+$H_{\mathrm{roll}}$ & Number of transitions in an imagined rollout, distinct from chunk length.\\
+$T_{\mathrm{ep}}$ & Terminal step index of an episode, not a duration in seconds.\\
+$g,\ C$ & Task specification and optional demonstration context. Context need not include action labels.\\
+$c_t=(h_t,g,C)$ & Policy conditioning information. Write $c$ for a generic training example.\\
+$C_{\mathrm{dyn}}$ & Additional evidence about physical conditions, such as earlier interactions.\\
+$L$ & Number of recent observation latents supplied to a predictor.\\
+$o_{j:k},\ z_{j:k}$ & Sequence from index $j$ through index $k$, inclusive.\\
+$i,\ N$ & Training-example index and number of examples in a batch.\\
+$m,\ M$ & Noise/time-sample index and number of samples in a Monte Carlo loss estimate.\\
+$j,\ k$ & Local indices: $j$ indexes a sampling grid or candidates; $k$ indexes a future offset. The use is stated locally.\\
+\bottomrule
+\end{longtable}
+
+\section*{Models and their parameters}
+\begin{longtable}{@{}p{40mm}p{116mm}@{}}
+\toprule Symbol & Meaning\\\midrule\endhead
+$\pi_\theta,\ \theta$ & Policy distribution and its trainable parameters. Its argument determines whether the distribution is over an action or a whole chunk.\\
+$\theta_{\mathrm{old}}$ & Fixed parameters of the behavior policy that collected the current batch.\\
+$v_\theta$ & Policy velocity network used for flow sampling and flow-loss evaluation. It is not the robot's physical velocity.\\
+$p_\phi,\ \phi$ & Conditional world-model distribution and its parameters.\\
+$P_\phi$ & Point-prediction alternative for latent dynamics, rather than a distribution.\\
+$R_\psi,\ \psi$ & Learned reward model and its parameters.\\
+$V_\nu,\ \nu,\ \bar\nu$ & Learned critic, its trainable parameters, and a fixed parameter copy used to form targets.\\
+$q_\zeta,\ \zeta,\ \widehat y$ & Outcome evaluator, its parameters, and its predicted label. The label is not automatically a calibrated probability.\\
+$E_\alpha,\ D_\beta$ & Observation encoder and decoder, with parameters $\alpha$ and $\beta$.\\
+$z_t$ & Observation latent $E_\alpha(o_t)$.\\
+$E_{\mathrm{tr}},\ z^\star$ & Fixed transition encoder and its future-derived latent target. The star marks a target here, not an optimal action.\\
+$f_\omega,\ \omega,\ \widetilde z$ & Action adapter, its parameters, and the latent condition predicted before the future is observed.\\
+$\eta_{\mathrm{learn}}$ & Positive learning rate in a gradient-descent update.\\
+$\Pr,\operatorname{sign}$ & Probability of an event; sign of a scalar (negative, zero, positive).\\
+$\mathcal D$ & Dataset of aligned training examples.\\
+$d_{\mathrm{image}},\ d_{\mathrm{latent}}$ & Chosen reconstruction and latent-prediction losses. Neither is inherently a physical distance.\\
+$\mathbf Q,\mathbf K,\mathbf V$ & Attention query, key, and value matrices. These differ from action values $Q^\pi$, execution prefix $K$, and critic values $V^\pi$.\\
+$d_{\mathrm{key}}$ & Shared dimension of an attention query and key.\\
+\bottomrule
+\end{longtable}
+
+\section*{Rewards, returns, and policy updates}
+\begin{longtable}{@{}p{40mm}p{116mm}@{}}
+\toprule Symbol & Meaning\\\midrule\endhead
+$r_t,\ \widehat r_t$ & Reward for the transition beginning at $t$, and its model prediction.\\
+$\gamma$ & Discount factor per stated decision interval, between zero and one.\\
+$G_t$ & Discounted return from step $t$ through the episode.\\
+$G_i^{\mathrm{target}}$ & Fixed return target for critic training sample $i$.\\
+$\widehat G_t^{(\lambda)}$ & Bootstrapped imagined return target using return-mixing parameter $\lambda$.\\
+$V^\pi,\ Q^\pi$ & Expected return under policy $\pi$; expected return after a specified first action and then following $\pi$.\\
+$\mathcal A^\pi,\ \widehat{\mathcal A}$ & True advantage $Q^\pi-V^\pi$ and an estimated advantage.\\
+$d_t,\ m_t=1-d_t$ & Terminal indicator and continuation mask. A computational cutoff alone is not termination.\\
+$\delta_t$ & One-step temporal-difference residual.\\
+$\lambda$ & Return/advantage mixing parameter in $[0,1]$; never log signal-to-noise ratio in this book.\\
+$b_{\mathrm{adv}}$ & Advantage-derived bin or indicator used as a policy input.\\
+$J(p),\ p$ & Expected return and left-action probability in the two-action teaching example.\\
+$f(a)$ & Fixed outcome score in the score-function gradient derivation.\\
+$S,\ S_{\mathrm{PPO}}$ & Local empirical policy surrogate and PPO's clipped surrogate, both maximized.\\
+$\rho,\ \tilde\rho$ & Exact current-to-behavior action-density ratio and FPO's flow-loss surrogate ratio. They are not interchangeable.\\
+$\epsilon_{\mathrm{clip}}$ & Positive clipping width in the policy surrogate; distinct from Gaussian noise $\epsilon$.\\
+$\mathcal L,\ \ell_\theta$ & A minimized loss and a loss for one sampled noise/time pair. Subscripts identify the objective or parameters.\\
+$\widehat{\mathcal L}_{\theta,i},\ \widehat{\mathcal L}_{\mathrm{old},i}$ & Monte Carlo flow-loss estimates for sample $i$, under current and fixed old policies.\\
+$\mathcal V_{\mathrm{RISE}},\ \widehat{\mathcal A}_{\mathrm{RISE}}$ & RISE-specific progress/value predictor and chunk score. The latter is not assumed equal to every textbook advantage estimator.\\
+$u_{\mathrm{hall}},\ \chi,\ \widetilde r$ & Estimated hallucination severity, penalty strength, and adjusted reward.\\
+$\mathcal U$ & Fixed set of candidate actions for a decision comparison.\\
+$\widehat Q,\ Q_{\mathrm{ref}}$ & Model-based decision score and independently estimated reference outcome value under a stated continuation rule.\\
+$a^\star,\ a_{\mathrm{ref}}^\star$ & Candidates maximizing the model score and reference value, respectively.\\
+\bottomrule
+\end{longtable}
+
+\section*{Generative sampling and likelihood bounds}
+\begin{longtable}{@{}p{40mm}p{116mm}@{}}
+\toprule Symbol & Meaning\\\midrule\endhead
+$\tau,\ X_\tau$ & Artificial flow time from noise ($0$) to action data ($1$), and the intermediate action sample.\\
+$\epsilon,\ I$ & Standard Gaussian noise and identity covariance of the appropriate dimension.\\
+$u_\tau$ & Known reference velocity along a constructed training path.\\
+$\tau_j$ & Point on the numerical sampling grid.\\
+$\sigma$ & Forward noising coordinate from data to noise in Appendix~\ref{app:bounds}; not a standard deviation.\\
+$\ell_{\mathrm{snr}}(\sigma)$ & Log signal-to-noise ratio along that forward process.\\
+$w,\ \widehat\epsilon_\theta$ & Nonnegative loss-weighting function and model-predicted noise.\\
+$\mathcal L^w_\theta$ & Weighted denoising loss under the stated schedule and parameterization.\\
+$B_\theta,\ \mathcal K_\theta$ & Variational lower bound on log likelihood and its nonnegative gap, for a compatible probabilistic construction.\\
+$b_{\mathrm{const}}$ & A term independent of policy parameters, common to old and current losses in the cancellation argument.\\
+\bottomrule
+\end{longtable}
+
+\section*{Physical interfaces and computational cost}
+\begin{longtable}{@{}p{40mm}p{116mm}@{}}
+\toprule Symbol & Meaning\\\midrule\endhead
+$\mathbf q_t$ & Robot configuration used to determine a coordinate transformation.\\
+$\Delta\mathbf p^{\mathrm T},\Delta\mathbf p^{\mathrm B}$ & Tool-frame and base-frame representations of one displacement. Superscripts name frames.\\
+$\mathbf R_{\mathrm{BT}}$ & Rotation mapping tool-frame vectors into base coordinates.\\
+$F_{\Delta t},\ \kappa$ & Physical transition over interval $\Delta t$, and controller/environment settings. In Chapter~\ref{ch:directions}, $\kappa$ is specifically a scalar deadband width.\\
+$\mathcal O,\ \varepsilon_t^s,\ \varepsilon_t^o$ & Observation map, process error, and observation error in the teaching state model.\\
+$\mathbf x_t,\mathbf v_t,\mathbf M$ & Cartesian positions, physical velocities, and a constant mass matrix in the simplified mechanics example.\\
+$\mathbf f_{\mathrm{int}},\mathbf f_{\mathrm{ext}}$ & Internal and applied forces in those coordinates.\\
+$\mathbf J_{\mathrm c},\mathbf f_{\mathrm c,t}$ & Contact Jacobian and contact force in contact coordinates.\\
+$\operatorname{gap}(\mathbf x),\ f_{\mathrm n}$ & Normal surface separation and compressive normal contact force.\\
+$T_{\mathrm{cycle}}$ & Elapsed time of one sequential prediction/decision cycle.\\
+$T_{\mathrm{policy}},T_{\mathrm{dynamics}}$ & Policy-sampling and world-prediction elapsed times.\\
+$T_{\mathrm{decode}},T_{\mathrm{judge}},T_{\mathrm{transfer}}$ & Decoding, scoring, and data-transfer elapsed times.\\
+\bottomrule
+\end{longtable}
+
+\section*{Operators and recurring abbreviations}
+\begin{longtable}{@{}p{40mm}p{116mm}@{}}
+\toprule Notation & Meaning\\\midrule\endhead
+$\sim,\ \mid,\ \cdot$ & Sampled from; conditioned on; an unspecified argument of a distribution.\\
+$\R,\ \mathcal N(0,I)$ & Real numbers and a zero-mean Gaussian with identity covariance.\\
+$\E,\ \nabla_\theta$ & Expectation over specified random inputs and gradient with respect to $\theta$.\\
+$\|\cdot\|,\ (\cdot)^\top$ & Euclidean norm (flattening an array when needed) and transpose.\\
+$\operatorname{sg}$ & Stop-gradient: preserve the value while setting its derivative to zero for the update.\\
+$\operatorname{clip}(x,l,u)$ & Restrict scalar $x$ to the interval with lower bound $l$ and upper bound $u$.\\
+$\arg\max$ & Return an argument attaining the maximum; use a specified tie rule.\\
+$\operatorname{softmax},\operatorname{Attn}$ & Normalize scores into nonnegative weights summing to one; scaled dot-product attention.\\
+$\operatorname{append}$ & Add a new action and observation to a history.\\
+CFM, ODE, NFE & Conditional flow matching; ordinary differential equation; number of function evaluations.\\
+RL, TD, GAE & Reinforcement learning; temporal difference; generalized advantage estimation.\\
+PMPO & Preference-based maximum a posteriori policy optimization.\\
+PPO, FPO, GRPO & Proximal Policy Optimization; Flow Policy Optimization; group-relative policy optimization.\\
+ELBO, KL, MSE & Evidence lower bound; Kullback--Leibler divergence; mean squared error.\\
+VLA, VLM & Vision--language--action model; vision--language model.\\
+RGB, KV & red--green--blue image channels; attention keys and values.\\
+FEM & Finite element method.\\
+TP, FP, FN, TN & True positives, false positives, false negatives, and true negatives, relative to the stated success label.\\
+\bottomrule
+\end{longtable}
+
+The published model names $\pi_0$, $\pi_{0.5}$, and $\pi^*_{0.6}$ are names, not time indices or instances of the parameter subscript $\theta$.
+
+Task and context arguments may be suppressed after they are defined, but their meaning does not change. The same rule applies to batch and time indices. An equation using one action can be extended to a chunk only after specifying its joint density, executed duration, reward aggregation, and discount interval.

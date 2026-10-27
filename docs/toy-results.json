@@ -1,0 +1,89 @@
+{
+  "settings": {
+    "seed": 2026,
+    "training_count": 400,
+    "test_count_per_condition": 200,
+    "training_width_m": 0.02,
+    "training_noise_half_width_m": 0.003,
+    "candidate_count": 41,
+    "candidate_step_m": 0.005,
+    "success_tolerance_m": 0.004,
+    "test_seeds": {
+      "original": 2027,
+      "shifted": 2028
+    },
+    "reference": "known deterministic toy transition; no evaluation noise",
+    "selection": "target error, then command magnitude, then signed command"
+  },
+  "fitted_parameters": {
+    "persistence": {},
+    "linear": {
+      "gain": 0.7012318727614743
+    },
+    "deadband": {
+      "width": 0.02
+    }
+  },
+  "results": [
+    {
+      "condition": "original",
+      "true_width_m": 0.02,
+      "model": "persistence",
+      "count": 200,
+      "prediction_mae_m": 0.02956061406102695,
+      "decision_regret_m": 0.026990782098739577,
+      "successes": 19,
+      "success_rate": 0.095
+    },
+    {
+      "condition": "original",
+      "true_width_m": 0.02,
+      "model": "linear",
+      "count": 200,
+      "prediction_mae_m": 0.006160551821006549,
+      "decision_regret_m": 0.005355873504052726,
+      "successes": 69,
+      "success_rate": 0.345
+    },
+    {
+      "condition": "original",
+      "true_width_m": 0.02,
+      "model": "deadband",
+      "count": 200,
+      "prediction_mae_m": 0.0,
+      "decision_regret_m": 0.0,
+      "successes": 200,
+      "success_rate": 1.0
+    },
+    {
+      "condition": "shifted",
+      "true_width_m": 0.04,
+      "model": "persistence",
+      "count": 200,
+      "prediction_mae_m": 0.017437033586419418,
+      "decision_regret_m": 0.027574152110620843,
+      "successes": 14,
+      "success_rate": 0.07
+    },
+    {
+      "condition": "shifted",
+      "true_width_m": 0.04,
+      "model": "linear",
+      "count": 200,
+      "prediction_mae_m": 0.016957633543178446,
+      "decision_regret_m": 0.016174152110620826,
+      "successes": 14,
+      "success_rate": 0.07
+    },
+    {
+      "condition": "shifted",
+      "true_width_m": 0.04,
+      "model": "deadband",
+      "count": 200,
+      "prediction_mae_m": 0.013867000310373537,
+      "decision_regret_m": 0.01499915211062083,
+      "successes": 14,
+      "success_rate": 0.07
+    }
+  ]
+}

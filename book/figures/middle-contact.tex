@@ -1,0 +1,14 @@
+\begin{tikzpicture}[>=Stealth,every node/.style={font=\small}]
+\foreach \x/\title in {0/Aligned,5/Rim contact,10/Impossible penetration}{
+\fill[accent!5,rounded corners] (\x-.2,-.2) rectangle ++(4.2,3.1);
+\draw[ink,very thick] (\x,.2)--(\x+1.2,.2)--(\x+1.2,1.3);
+\draw[ink,very thick] (\x+2.6,1.3)--(\x+2.6,.2)--(\x+3.8,.2);
+\node[align=center,text width=37mm] at (\x+1.9,2.6) {\title};
+}
+\draw[accent,fill=accent!20,thick] (1.4,.55) rectangle (2.4,1.95);
+\draw[accent,fill=accent!20,thick] (5.7,1.35) rectangle (6.7,2.1);
+\fill[orange!85!black] (6.2,1.3) circle (.1);
+\draw[orange!85!black,fill=orange!15,thick] (10.7,.55) rectangle (11.7,1.95);
+\draw[orange!85!black,very thick] (11,.8)--(11.45,1.3);\draw[orange!85!black,very thick] (11,1.3)--(11.45,.8);
+\node[align=center] at (6.7,-.75) {A small alignment change can change the contact event.\\Rendering a clean image does not enforce nonpenetration.};
+\end{tikzpicture}

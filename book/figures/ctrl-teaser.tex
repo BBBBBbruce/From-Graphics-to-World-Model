@@ -1,0 +1,7 @@
+\begin{tikzpicture}[>=Stealth,every node/.style={font=\small},b/.style={draw=accent,fill=accent!6,rounded corners=3pt,align=center,text width=36mm,minimum height=18mm,inner sep=5pt}]
+\node[b] (n0) at (0,0) {Policy proposes};
+\node[b] (n1) at (5,0) {Model predicts};
+\node[b] (n2) at (10,0) {Policy reacts};
+\draw[->,very thick,accent] (n0)--(n1);\draw[->,very thick,accent] (n1)--(n2);
+\draw[->,accent] (n2.south)--++(0,-.7)-|(n0.south);
+\end{tikzpicture}

@@ -1,0 +1,27 @@
+\chapter{Selected Exercise Solutions}
+\label{app:solutions}
+These solutions show the essential reasoning. Open-ended designs can have several valid answers if their assumptions and evidence are explicit.
+
+\paragraph{Exercise~\ref{ex:state}.} The future position depends on velocity as well as position. A second timestamped image can help estimate velocity; direct velocity measurement can also help. Neither guarantees that other relevant variables, such as contact force, are known.
+
+\paragraph{Exercise~\ref{ex:descent}.} The gradient remains $-1.2$, so the new value is $0.2-0.5(-1.2)=0.8$. It fits this one scalar target exactly. There is no evidence about new observations, a different target, or task success.
+
+\paragraph{Exercise~\ref{ex:clocks}.} The executed prefix lasts $3\times0.04=0.12$ seconds. Twelve is the proposed horizon, three is the executed prefix, and eight is a sampling budget. None specifies how many optimizer updates occur; deployment may use zero.
+
+\paragraph{Exercise~\ref{ex:context}.} Hold checkpoint, observations, and task evaluation fixed while changing only the demonstration; a behavior change tests context response. For persistent learning, compare retained checkpoints under matched inputs after training, including removal of the new demonstration and checks on previous tasks. Record the actual parameter update and evaluate behavior independently; a changed file alone does not establish useful learning.
+
+\paragraph{Exercise~\ref{ex:return}.} The first-step return is $0+0.9(0)+0.9^2(1)=0.81$. Subtracting 0.6 gives 0.21. If success is imagined, the arithmetic is unchanged but its evidential meaning changes: the target depends on the world model and reward model being correct.
+
+\paragraph{Exercise~\ref{ex:surrogate}.} The surrogate is $\exp(0.8-0.6)=\exp(0.2)\approx1.2214$. It is an exponentiated estimated flow-loss difference. Monte Carlo noise, scaling conventions, and the likelihood-bound gap prevent treating it as an exact density ratio; see Appendix~\ref{app:bounds}.
+
+\paragraph{Exercise~\ref{ex:units}.} Velocity times duration gives $0.002\times0.1=0.0002$ metres. Interpreting 0.002 as displacement gives ten times as much requested motion. Both calculations assume the stated interval and ideal command execution.
+
+\paragraph{Exercise~\ref{ex:future}.} The future-derived code can be a fixed training target for an adapter using current history and action. It cannot be a required deployment input before that future is observed. If it encodes an outcome not determined by the available inputs, the adapter needs more evidence or uncertainty modeling.
+
+\paragraph{Exercise~\ref{ex:audit}.} False discoveries among accepted clips are $4/20=20\%$. False positives among actual failures are $4/50=8\%$. The accepted set and actual-failure set are different denominators. Other confusion counts remain necessary to describe coverage.
+
+\paragraph{Exercise~\ref{ex:regret}.} The model selects the first candidate. The reference prefers the second. Regret is $0.8-0.2=0.6$. A recording of one action does not supply all three reference values; additional trials or a justified reference simulator would be needed.
+
+\paragraph{Exercise~\ref{ex:deadband}.} The next positions are 0.5, 0.53, and 0.47 metres. All differ from the unit-gain prediction $s_t+a_t$ because the nonzero commands lose displacement to the deadband. The small command reveals the flat region directly.
+
+\paragraph{Exercise~\ref{ex:project}.} One valid design keeps a hidden width fixed within each multi-step episode and varies it between episodes. Inputs are observed positions, applied commands, and timestamps; the true width is used only for evaluation. Split by complete episodes and reserve some widths for a separate generalization test. Compare a fixed training-set width with an estimator using recent action--response pairs under equal interaction budgets. If history lowers parameter error but worsens held-out decision regret, the proposed claim about better decisions is not supported. Define measurement noise and how exploratory actions count toward the budget.

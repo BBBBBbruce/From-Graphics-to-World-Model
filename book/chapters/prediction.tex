@@ -1,0 +1,172 @@
+% !TEX root = ../main.tex
+\chapter{From Video Prediction to a Controllable Manipulation Model}
+\label{ch:engineering}
+
+The cup example in Chapter~\ref{ch:story} established a complete learning loop. Now make the task less forgiving. A gripper holds a connector just above its socket. The camera suggests that the parts are aligned, but the connector could be tilted, the cable could be pulling sideways, or one edge could already be touching the fixture. The next command is only a small movement. Its consequence could be insertion, harmless contact, or a jam.
+
+The question is no longer simply whether we can generate the next image. It is whether a compact model preserves enough information to distinguish actions that matter. We will answer it in stages: give controls a precise meaning, identify the information available before execution, choose a representation, and expose contact errors. The equations and connector examples in this chapter are teaching constructions unless a paper is explicitly named.
+
+\section{First decide what question the model answers}
+A predictive world model answers a conditional question: given what we have observed and a specified action, what might happen? A policy answers a different question: given what we have observed and want to achieve, what action should we choose? A system may share features between these functions, but their interfaces remain different.
+
+Use the same variables as Chapter~\ref{ch:story}: $o_t$ is the current observation, $h_t$ the available history, $g$ the task specification, and $C$ optional demonstration context. The policy parameters are $\theta$; the world-model parameters are $\phi$. For a one-action decision,
+\begin{align}
+ a_t &\sim \pi_\theta(\cdot\mid h_t,g,C), \label{eq:middle-policy}\\
+ \widehat o_{t+1} &\sim p_\phi(\cdot\mid h_t,a_t). \label{eq:middle-world}
+\end{align}
+An observed future is $o_{t+1}$; a generated future is $\widehat o_{t+1}$. Task information belongs in the policy because insertion and withdrawal require different choices. Changing the goal alone should not change the physical consequence of the same action from the same state.
+
+There are legitimate reasons to condition dynamics on additional context: an earlier interaction might reveal stiffness, friction, or an unseen fixture configuration. Such information changes our estimate of the world. The distinction is between information about physical conditions and a desired outcome. If a generator uses ``success'' as an input and paints success regardless of the action, it has answered the wrong question for policy evaluation.
+
+A policy that jointly predicts actions and future observations may be useful for choosing behavior, but it is not automatically a simulator accepting arbitrary externally chosen controls. A demonstration-conditioned policy need not predict futures at all. Instant Policy and SynthICL illustrate learning an action policy whose behavior changes with demonstration context~\citep{instant,synthicl}. Here their role is to explain task specification; a dynamics model has a separate predictive responsibility.
+
+\checkpoint{Three arrows}{For a new diagram, identify the arrow that chooses the action, the arrow that predicts its consequence, and the arrow that defines success. Shared tokens or shared weights do not erase these three responsibilities.}
+
+\section{An action is a physical contract}
+``Move down by two millimetres'' is incomplete. Down relative to the camera, the robot base, or the connector? Is the number a displacement, a velocity, or a target position? How long is it applied, and which controller turns it into motor commands? These details determine the transition that the world model must learn.
+
+\worked{The same numbers, two different motions}
+Suppose the command is a tool-frame displacement $\Delta\mathbf p^{\mathrm T}=(0,0,0.002)$ metres. Let $\mathbf q_t$ be the robot configuration and $\mathbf R_{\mathrm{BT}}(\mathbf q_t)$ the rotation from tool coordinates to base coordinates. The corresponding base-frame displacement, denoted by $\Delta\mathbf p^{\mathrm B}$, is
+\begin{equation}
+ \Delta\mathbf p^{\mathrm B}=\mathbf R_{\mathrm{BT}}(\mathbf q_t)\Delta\mathbf p^{\mathrm T}.
+ \label{eq:middle-frame}
+\end{equation}
+A tilted tool can move diagonally in base coordinates even though only the third entry of the local displacement is nonzero. By contrast, a base-frame command $(0,0,0.002)$ moves along the base's third coordinate axis. The translation of the tool origin is absent from Equation~\eqref{eq:middle-frame} because it transforms a displacement vector; transforming a point would also require translation.
+
+If $0.002$ instead means metres per second, applying it for $0.1$ seconds produces a nominal displacement of $0.0002$ metres. This tenfold difference is illustrative arithmetic, not a robot specification. A model cannot recover the intended interpretation from a normalized number alone. Normalization constants must therefore travel with the action schema.
+
+The applied motion also depends on the controller. A compliant controller may yield at contact while another controller tracks the same target more rigidly. Let $\kappa$ collect controller and environment settings, $\Delta t$ be the physical interval, and $F_{\Delta t}$ be a physical transition map over that interval. Let $\mathcal O$ map physical state to an observation. Process and observation errors are denoted by $\varepsilon_t^{s}$ and $\varepsilon_t^{o}$:
+\begin{equation}
+ s_{t+1}=F_{\Delta t}(s_t,a_t;\kappa)+\varepsilon_t^{s},
+ \qquad o_t=\mathcal O(s_t)+\varepsilon_t^{o}.
+ \label{eq:middle-state}
+\end{equation}
+The additive errors are a teaching abstraction in a chosen coordinate representation. A probabilistic predictor represents uncertainty over relevant variables it cannot observe; a point predictor may average over them. Mixing incompatible controllers without recording their settings can give apparently identical training inputs contradictory targets.
+
+\subsection{Put observations on the correct side of the action}
+The integer $t$ indexes control steps. Let $t_{\mathrm{phys},t}$ be the physical timestamp of step $t$. The observation $o_t$ precedes action $a_t$, which is applied over $[t_{\mathrm{phys},t},t_{\mathrm{phys},t}+\Delta t)$. The next observation is $o_{t+1}$. Real cameras have exposure times and transport delay; a timestamp on receipt is not necessarily the measurement time. The predictor should be trained with the action that actually governed the interval, including any controller clipping or interruption that is available in the log.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[>=Stealth, node distance=9mm, every node/.style={font=\small}, b/.style={draw=accent,rounded corners,align=center,text width=37mm,minimum height=14mm}]
+\node[b] (obs) {Observe $o_t$\\history available};
+\node[b,right=of obs] (act) {Apply $a_t$\\over $\Delta t$};
+\node[b,right=of act] (next) {Observe $o_{t+1}$\\training target};
+\draw[->,thick] (obs)--(act);\draw[->,thick] (act)--(next);
+\node[below=8mm of act,align=center,text width=130mm] {Prediction is issued before the rightmost observation exists.\\A later frame may supervise training; it cannot be a deployment input.};
+\end{tikzpicture}
+\caption{Original timing diagram for our connector example. Physical time $\Delta t$ is separate from the noise or integration coordinate inside a generative sampler.}
+\label{fig:middle-timing}
+\end{figure}
+
+A policy might propose ten controls but execute only two before observing again. The world model must receive the executed prefix when explaining the recorded next observation. When imagining the unexecuted suffix, it is making a counterfactual prediction. The sampler's number of neural evaluations changes computational cost; the executed action duration changes physical exposure. They should never share an ambiguous ``step'' field.
+
+\section{Learn from future frames without needing them at deployment}
+Video provides abundant evidence of change, but a change is not the same as a command. Seeing a connector move into a socket tells us both about the gripper motion and about the object's response. An encoder trained to compress the entire transition can hide both in its latent action. Such a code can reconstruct a future extremely well while being hard to predict from a robot command.
+
+\conceptfigure{middle-skelam}{Keep tomorrow out of today's inputs}{A training encoder may inspect the future. The deployed action adapter must use information available before execution. Conceptual connection: \citep{skelam}.}{fig:middle-skelam}
+
+SkeLAM separates skeleton-grounded kinematic information from residual visual transition information. Skeleton supervision and swap reconstruction encourage compatible motion representations; branch dropout reduces dependence on future-derived conditions. A robot-action adapter supplies the kinematic condition, with a null residual at inference~\citep[Sec.~3 and App.~B]{skelam}. Its Appendix C.3 evaluates recorded-action open-loop replay: 105 episodes, only nine real successes. This provides evidence about prediction and ranking on that dataset; it does not test closed-loop policy improvement.
+
+To isolate the general issue, let $E_{\mathrm{tr}}$ be a fixed transition encoder and $z^\star=E_{\mathrm{tr}}(o_t,o_{t+1})$ its latent training target. Let $f_\omega$ be an action adapter with parameters $\omega$, producing $\widetilde z=f_\omega(h_t,a_t)$ before the future is known. On an aligned dataset $\mathcal D$, a simple adapter loss is
+\begin{equation}
+ \mathcal L_{\mathrm{adapt}}(\omega)
+ =\E_{\mathcal D}\left[\|f_\omega(h_t,a_t)-\operatorname{sg}(z^\star)\|^2\right].
+ \label{eq:middle-adapter}
+\end{equation}
+This teaching loss updates the adapter, not the fixed target encoder. If the target includes an unpredictable outcome, the adapter cannot infer it reliably. Squared-error regression may instead predict an average that describes no useful physical transition.
+
+For insertion, imagine two identical commands from visually similar starts: one seats the connector and one catches an edge. If the latent target includes the fact of seating, the command alone cannot determine it without more state information. We can improve observability, represent several plausible futures, or restrict the latent to information the command actually specifies. We cannot solve missing information simply by increasing reconstruction accuracy.
+
+\checkpoint{Availability audit}{For every conditioning tensor, write when it becomes available. Future frames, success labels, simulator-only states, and human corrections may be valid training targets while remaining unavailable deployment inputs.}
+
+\section{Compress what the next decision needs}
+A raw image spends many pixels on texture and lighting. A compact representation can reduce prediction cost, but the connector's tiny alignment error may occupy fewer pixels than an irrelevant shadow. Compression is therefore a modeling choice about retained information, not merely a file-size reduction.
+
+Let $E_\alpha$ be an observation encoder with parameters $\alpha$, $D_\beta$ a decoder with parameters $\beta$, and $z_t=E_\alpha(o_t)$ an observation latent. Let $P_\phi$ be a point predictor of the next latent. It uses the most recent $L$ latents, denoted by $z_{t-L+1:t}$, and the applied action. Define $d_{\mathrm{image}}$ and $d_{\mathrm{latent}}$ as chosen nonnegative reconstruction and prediction losses. A generic two-stage objective is
+\begin{align}
+ \min_{\alpha,\beta}\quad &\E\,d_{\mathrm{image}}\big(D_\beta(E_\alpha(o_t)),o_t\big),\label{eq:middle-ae}\\
+ \min_{\phi}\quad &\E\,d_{\mathrm{latent}}\big(P_\phi(z_{t-L+1:t},a_t),
+                    \operatorname{sg}(E_\alpha(o_{t+1}))\big).
+ \label{eq:middle-latent}
+\end{align}
+The expectations are over training observations and aligned transitions. The encoder and decoder are fixed in the second stage. These are teaching objectives, not the exact consistency losses of the following paper. A stochastic predictor can replace $P_\phi$ when multiple futures matter. Distance in a learned latent space is not inherently a calibrated physical distance.
+
+\conceptfigure{middle-iws}{Compression can erase the decision}{Inspect whether the representation preserves the small geometric feature that separates a safe push from a jam. Conceptual connection: \citep{iws}.}{fig:middle-iws}
+
+Interactive World Simulator trains a compact image autoencoder with a consistency decoder, freezes it, and learns action-conditioned latent consistency dynamics. Its task-specific setup includes default $128\times128$ imagery and restricted action spaces for some tasks. Interactive demonstrations exceeding ten minutes and the quantitative 192-step, 19.2-second prediction evaluation are distinct evidence. Its Dreamer 4 comparison uses a community implementation trained from scratch~\citep[Secs.~III-B and IV-A--B]{iws}. These conditions matter before transferring a speed claim to another model or task.
+
+Our insertion question is whether the representation preserves the socket rim, connector orientation, contact progression, and any available force cue. A reconstruction can look acceptable while smoothing away the one edge that distinguishes ``push'' from ``retract.'' Before training a policy, inspect encoder-decoder reconstructions around this decision. If the distinction is already absent there, a more accurate latent predictor cannot recover it from the compressed input alone.
+
+\subsection{History and multiple views solve different ambiguities}
+A wrist camera may see the socket but lose it during approach. A fixed camera may retain the scene but miss insertion depth. Recent history can reveal the approach direction; multiple synchronized views can expose different parts of the same state. Neither guarantees that hidden contact force is observable.
+
+WEAVER and Ctrl-World provide multiview and memory references already developed in Chapter~\ref{ch:story}~\citep{weaver,ctrl}. Here the useful comparison is functional: what state ambiguity does each extra view or retrieved frame resolve? A past image of an unobstructed socket can preserve geometry, but it should not be mistaken for evidence that the current connector has seated. Recorded and generated memory also need distinct provenance: an imagined frame is a prediction carried forward, not a new measurement that corrects drift.
+
+A proposed training record should therefore carry camera identity, timestamp, calibration version where applicable, and a validity mask. Replacing a missing wrist frame with a repeated image without marking it missing changes the apparent dynamics. Likewise, permuting left and right cameras can look like a geometry failure while being a data-interface error.
+
+\subsection{Measure the entire cycle}
+For a sequential iteration, let $T_{\mathrm{policy}}$, $T_{\mathrm{dynamics}}$, $T_{\mathrm{decode}}$, $T_{\mathrm{judge}}$, and $T_{\mathrm{transfer}}$ be the elapsed times for policy sampling, prediction, image decoding, scoring, and data transfer. The total is
+\begin{equation}
+ T_{\mathrm{cycle}}=T_{\mathrm{policy}}+T_{\mathrm{dynamics}}+
+ T_{\mathrm{decode}}+T_{\mathrm{judge}}+T_{\mathrm{transfer}}.
+ \label{eq:middle-cost}
+\end{equation}
+These are elapsed costs for a stated batch and horizon, not universal constants. A pipelined implementation needs separate timing of its critical path. If a policy consumes red--green--blue (RGB) images, latent prediction speed alone omits decoding. If evaluation inspects several cameras, scoring cost may grow too. Report hardware, batch, resolution, views, physical horizon, sampling evaluations, and which terms were timed. Unmatched throughput numbers for IWS, WEAVER, and Ctrl-World are not comparable. The goal is enough useful predictions for a decision, not a large isolated frames-per-second number.
+
+\section{Make contact error visible}
+A free-space prediction can tolerate a small pose error and still tell a useful story. At the socket rim, the same error may put the connector on the wrong side of a contact boundary. The model then predicts an entirely different sequence: sliding, sticking, or passing through geometry. Visually plausible interpolation does not enforce nonpenetration.
+
+A mechanical model makes some of the hidden quantities explicit. For a simple mechanical system in Cartesian coordinates, let $\mathbf x_t$ and $\mathbf v_t$ be positions and velocities, and $\mathbf M$ a constant mass matrix. Let $\mathbf f_{\mathrm{int}}$ and $\mathbf f_{\mathrm{ext}}$ be internal and applied forces. The contact Jacobian $\mathbf J_{\mathrm c}$ maps velocity to contact coordinates; its transpose maps the contact force $\mathbf f_{\mathrm c,t}$ back to the motion coordinates. A schematic discrete balance is
+\begin{equation}
+ \mathbf M\frac{\mathbf v_{t+1}-\mathbf v_t}{\Delta t}
+ =\mathbf f_{\mathrm{int}}(\mathbf x_t,\mathbf v_t)
+  +\mathbf f_{\mathrm{ext}}(a_t)
+  +\mathbf J_{\mathrm c}(\mathbf x_t)^\top\mathbf f_{\mathrm c,t}.
+ \label{eq:middle-contact}
+\end{equation}
+This balance omits details such as the integration of positions and the solution for contact forces; it is not a complete contact solver. For ideal unilateral contact, define $\operatorname{gap}(\mathbf x)$ as the normal separation and $f_{\mathrm n}$ as the compressive normal force. The constraints $\operatorname{gap}(\mathbf x)\geq0$, $f_{\mathrm n}\geq0$, and $\operatorname{gap}(\mathbf x)f_{\mathrm n}=0$ express nonpenetration and the absence of normal force when surfaces are separated. Compliance and friction require additional modeling. The MuJoCo documentation explains why hard and soft contact formulations make different approximations~\citep{mujococomputation}.
+
+A learned predictor need not contain a finite element method (FEM) solver. The mechanical view instead identifies what its transition map must represent: geometry, material response, boundary conditions, and contact. Predicting a finite-time state change directly does not automatically preserve the constraints or conservation properties of a numerical solver. Learning from a simulator also does not establish that the simulator's materials match the physical connector.
+
+\conceptfigure{middle-contact}{Three geometric outcomes}{Original connector cross-sections show why small alignment errors matter. Explicit state prediction exposes geometric quantities for checking; it also requires appropriate geometry and state information. Conceptual connection: \citep{worldcontact}.}{fig:middle-contact}
+
+WorldContact predicts explicit vertex states for deformable manipulation. Its tokenizer distinguishes spatial, topological, controllable, and environmental contacts. Training supervises positions and velocities across rollouts; a differentiable topology projection supports longer predictions. Rendering follows state prediction. Its reported state-rollout acceleration excludes rendering and disk input/output. The real bag-lifting comparison is 13/20 versus 19/20 single attempts with different training-data sets~\citep[Secs.~III--V]{worldcontact}. This is a useful contrasting representation, not a drop-in RGB model or evidence of connector performance.
+
+For our task, explicit geometry could expose penetration depth or connector-axis misalignment directly. The price is obtaining the state, geometry, material assumptions, and boundary conditions needed to initialize and condition the predictor. A visual latent model begins from more readily available observations but makes such physical checks less direct. A hybrid could predict visual features and selected contact-relevant quantities, provided those quantities have credible supervision. That is a design hypothesis to test.
+
+\begin{table}[H]\centering\small
+\caption{Our representation comparison for the illustrative insertion task. Required information determines which option is feasible.}
+\begin{tabularx}{\linewidth}{@{}p{28mm}YY@{}}\toprule
+Representation & Useful question & Missing information to resolve\\\midrule
+Visual latent & Does the approach and visible outcome follow the action? & Does compression retain the rim and depth cues? Can force be inferred?\\
+Explicit state & Are pose, velocity and geometric contact plausible? & How are state, shape and material properties obtained?\\
+Hybrid & Can a visual rollout retain measurable task variables? & Which labels align the visual and physical predictions?\\\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Turn the model into a reproducible data contract}
+We now have enough structure to specify one training example. Start from a recorded insertion attempt, align its observations and applied controls, and select a history window. Store the subsequent observations as targets. Keep the success label separate: a failed insertion is still valid evidence of how the world responded. A human correction supplies a new command or label; it does not retroactively change the recorded future.
+
+\begin{table}[H]\centering\small
+\caption{Minimum proposed record for the connector example. Use it to audit a new dataset before fitting a predictor.}
+\begin{tabularx}{\linewidth}{@{}p{30mm}Y@{}}\toprule
+Field group & What must be recoverable\\\midrule
+Identity & Episode, source, task, object/fixture configuration and dataset split.\\
+Measurements & Camera identity and time, proprioception, available force/depth, validity masks.\\
+Controls & Applied sequence, units, frame, duration, controller version, clipping and interruption where logged.\\
+Targets & Observed next frames/state; outcome label and its evidence; uncertain cases retained explicitly.\\
+Generated branch & Parent real context, world-model version, sampled controls, random seed and evaluator version.\\\bottomrule
+\end{tabularx}
+\end{table}
+
+Split by source episode before generating overlapping windows. If a held-out episode produces synthetic descendants, those descendants must not leak into training. For a stronger generalization claim, also hold out the relevant object or fixture configurations. Context demonstrations must not reveal the target episode's future outcome. These rules define what the evaluation asks: memorizing nearby frames is different from predicting a new contact configuration.
+
+Training against observed histories and rolling out against generated histories also create different inputs. In a rollout, the model consumes its own mistakes. Testing several horizons, marking generated memory, and restarting from independent real contexts help locate this drift. They do not make arbitrary long predictions reliable. The horizon should be chosen by the decision being supported and the evidence available, rather than by how long an attractive demo can run.
+
+A controllable predictor now has meaningful actions, available conditioning information, an appropriate representation, and traceable targets. To improve a policy with it, we must also define rewards, value targets, update boundaries, and independent evaluation. Chapter~\ref{ch:evaluation} develops these requirements and the tests needed to connect imagined success to measured improvement.
+\FloatBarrier
+
+\section{Exercises}
+\exercise{units}{A command 0.002 is interpreted as metres per second and applied for 0.1 seconds. What displacement does it request? How does that differ from interpreting it as a displacement in metres?}
+\exercise{future}{A transition encoder receives the next image during training. Give one valid use of its output and one invalid deployment use. Explain which missing information causes the problem.}
+\FloatBarrier

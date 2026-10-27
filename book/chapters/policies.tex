@@ -1,0 +1,174 @@
+% !TEX root = ../main.tex
+\chapter{Policies, Demonstrations, and Context}
+\label{ch:policy}
+
+A robot first needs to imitate a demonstrated motion. Then it must handle a changed scene and interpret a new demonstration. This chapter follows those steps through the same cup-moving problem. The papers enter when their mechanisms answer a concrete question about action generation or context. Chapter~\ref{ch:story} then asks how the robot can learn from an action's consequences.
+
+Our destination is a training loop, but this chapter starts with action generation. We will learn how a policy generates a continuous action and how a demonstration can condition that action. Chapter~\ref{ch:story} will then introduce feedback that changes the policy weights. Keep one question in mind throughout: \emph{what information would the robot need to do better on its next attempt?}
+
+\conceptfigure{pi0-teaser}{One task, changing evidence}{Feedback lets the next movement respond to a shifted cup. The complete policy, rather than object recognition alone, must choose commands. Conceptual connection: \citep{pi0}.}{fig:pi0-teaser}
+
+\section{A cup, a camera, and a decision}
+A cup stands on a table. A person demonstrates lifting it and placing it on a coaster. On the next attempt the cup is slightly farther away, its handle faces another direction, and the wrist camera sees the rim only after the gripper begins to move. A useful robot must preserve the intention while changing the motion. Replaying the demonstrator's joint commands would generally miss the cup. Recognizing the word ``cup'' would not tell the fingers when to close. The problem is to select actions from incomplete, changing evidence.
+
+We begin by distinguishing the physical situation from what the robot can observe. Let $s_t$ denote the full physical state at control step $t$, where $t$ is an integer index: robot configuration, cup pose, velocities, contact conditions, and other relevant variables. An observation $o_t$ might contain external and wrist-camera images together with joint angles and gripper state. It usually does not reveal every component of $s_t$. For instance, a camera may show fingers around a cup without revealing whether friction is sufficient to hold it. Calling an image a ``state'' is convenient shorthand in many papers, but it does not make the physical system fully observed.
+
+An action $a_t$ is a command in a defined interface. It might specify joint velocities, a desired joint configuration, or a relative end-effector pose and a gripper command. These are different mathematical objects. A translation of $1$ could mean a metre, a normalized coordinate, or a displacement in another frame. Consequently, the first engineering question is what a vector means, at what rate it is executed, and which controller interprets it. A learning algorithm cannot repair an unspecified action convention.
+
+\subsection{Why feedback changes the learning problem}
+A photograph of the cup is an input, but the robot's next input depends on what it does now. Moving the wrist changes the camera view; touching the rim can shift the cup; closing the fingers can establish or miss a grasp. The interaction therefore forms a feedback loop: observe, act, receive a new observation, and act again. A policy participates in creating the future situations in which it will be evaluated. This is a central difference from predicting labels on a fixed set of images~\citep{dagger}.
+
+History matters because two nearly identical images can require different actions. A stationary cup and a slowly slipping cup may look similar in one frame. A short sequence can reveal the motion. We write $h_t=(o_0,a_0,o_1,\ldots,a_{t-1},o_t)$ for the available observation--action history through step $t$. A model may compress this history or use only a recent window; those are approximations to the information represented by $h_t$. The \emph{Markov} idealization says that a state contains enough information to predict the next-state distribution given an action, without needing earlier history. A camera image need not meet that idealization. Using history is one way to address missing information, although a finite learned summary is not guaranteed to retain everything~\citep{rlintro}.
+
+A \emph{policy} chooses an action from available information. Let $g$ specify the task, $C$ denote optional demonstration context, and $\theta$ denote the policy parameters. A stochastic policy defines a conditional action distribution:
+\begin{equation}
+ a_t\sim\pi_\theta(\,\cdot\mid h_t,g,C),
+ \label{eq:policy}
+\end{equation}
+The vertical bar means ``given,'' and $\sim$ means ``sampled from.'' The policy parameters are its network weights. Sampling selects one action from the conditional distribution. Different samples can yield different sensible approaches to the same cup. A deterministic controller is a useful limiting case, but it should not be silently substituted for a stochastic policy in likelihood-based derivations.
+
+The network weights encode a shared computation that responds to inputs. During \emph{inference}, weights stay fixed; during \emph{training}, an optimizer changes them. Reacting to a new image therefore need not involve learning new weights.
+
+A recovery within one attempt demonstrates feedback. Retaining a better response across attempts requires separate evidence of persistent learning.
+
+A demonstration is a recorded trajectory: observations aligned with the commands that produced subsequent observations. A collection of such trajectories supports \emph{imitation learning}, in which the policy learns to generate actions resembling the demonstrated behavior under the corresponding conditions. The supervision is richer than a final image of a cup on a coaster: it contains decisions made during approach, contact, lift, transport, and release. Alignment matters. Pairing the image after a successful grasp with the command before contact teaches a different relationship from pairing the command with its actual input observation.
+
+A manipulation policy can propose several actions at once. Let $H$ be the number of actions, $d_a$ the dimension of each action, and $K\leq H$ the number executed before replanning. Use $\R^{H\times d_a}$ for real arrays of that shape. The proposed \emph{action chunk} is
+\begin{equation}
+ \mathbf a_t=(a_t,a_{t+1},\ldots,a_{t+H-1})\in\R^{H\times d_a}.
+ \label{eq:chunk}
+\end{equation}
+Bold $\mathbf a_t$ denotes the whole chunk; $a_t$ denotes one action. A policy density evaluated on a chunk is a joint density over that chunk, not a product of independent action densities unless explicitly assumed. The entries are proposed future actions, indexed by their intended execution steps. The controller executes the first $K$ actions, observes again, and replans; the remaining proposals may therefore be replaced. This receding-horizon pattern combines temporally coherent motion with feedback. A cup that slips after contact should alter the next decision even if the previous chunk confidently predicted a lift. Action chunking is central to Diffusion Policy and the flow policies considered here~\citep{diffusionpolicy,pi0}.
+
+\worked{Three clocks that must stay separate}
+Imagine a toy controller that predicts eight actions, executes two at a time, and uses six numerical integration steps to generate each chunk. Eight is a prediction horizon, two is an execution prefix, and six is a sampler budget. None specifies how many optimizer updates occur. If the control period is $0.05$ seconds in this illustrative example, the executed prefix covers $0.1$ physical seconds; the six sampler steps need not correspond to any physical interval. Training could be completely disabled during deployment. A trace should therefore record physical timestamps, sampler settings, and model versions separately.
+
+\subsection{Why one average action can be the wrong answer}
+Imagine that the cup has two accessible grasp regions, one on each side of an obstacle. Half the demonstrations approach from the left and half from the right. If a deterministic regressor minimizes squared error against both motions under indistinguishable inputs, it is encouraged toward their conditional average. That average can pass through the obstacle even though neither demonstrated approach does. This is a teaching example of \emph{multimodality}: several separated families of actions can be valid. The value of expressive action distributions is a motivation for generative policies such as Diffusion Policy~\citep{diffusionpolicy}.
+
+A distribution can retain both alternatives and sample one coherent approach. The random seed selects variation; the observation and task determine which variation is appropriate. Randomness alone is not competence: sampling from an untrained distribution produces arbitrary commands. Training must shape the random input into useful motions. This gives us a precise question for the next section: how can we learn a flexible distribution over an entire continuous action chunk?
+
+\section{Generating continuous actions with a flow policy}
+\subsection{Why predict a velocity field?}
+The role of a flow policy is to turn a simple random input into a structured action chunk conditioned on the scene and task. In \piz, a pretrained vision--language backbone provides representations and a continuous action expert is trained with conditional flow matching~\citep{pi0}. This connects semantic understanding to motor output without requiring every real-valued action coordinate to be generated as an ordinary word token.
+
+The learning construction is especially simple when we already have a target action chunk $\mathbf a$. Draw standard Gaussian noise $\epsilon\sim\mathcal N(0,I)$ of the same shape, where $I$ is the identity covariance, and sample artificial flow time $\tau$ uniformly from $[0,1]$ for this basic construction. Here we use the convention that $\tau=0$ is noise and $\tau=1$ is data; papers or implementations may reverse it. Let $X_\tau$ be a noisy intermediate chunk and $u_\tau$ its reference velocity. Define a straight training path
+\begin{equation}
+ X_\tau=(1-\tau)\epsilon+\tau\mathbf a,
+ \qquad u_\tau=\frac{dX_\tau}{d\tau}=\mathbf a-\epsilon.
+ \label{eq:interpolation}
+\end{equation}
+The target velocity $u_\tau$ is known because both endpoints were selected during training. It is not measured from the robot and is not an estimated reward. Write $c_t=(h_t,g,C)$ for the policy's conditioning information, and omit the subscript when discussing a generic training example. The velocity network $v_\theta(X_\tau,\tau;c)$ predicts the reference velocity. Let $\E$ denote expectation over the specified random inputs and $\|\cdot\|$ the Euclidean norm after flattening the chunk. Denote the conditional flow-matching (CFM) loss by $\mathcal L_{\mathrm{CFM}}$:
+\begin{equation}
+ \mathcal L_{\mathrm{CFM}}(\theta)=
+ \E_{(c,\mathbf a),\epsilon,\tau}
+ \left[\left\|v_\theta(X_\tau,\tau;c)-(\mathbf a-\epsilon)\right\|^2\right].
+ \label{eq:cfm}
+\end{equation}
+The expectation averages over training chunks, noise, and flow time. Different time-sampling distributions, weights, and normalization conventions change the practical objective; they will matter again in Flow Policy Optimization (FPO). For now, its purpose is supervised velocity prediction~\citep{flowguide}.
+
+Each demonstration chunk supplies many noisy intermediate points with known target velocities. Training fits these local regression problems; later, their learned field supports action generation~\citep{floworiginal}.
+
+Why begin with Gaussian noise? It provides a distribution that is easy to sample and has no task-specific structure. The network learns the transformation that supplies the structure. A noise tensor here has the shape of an action chunk; it is a computational starting point, not a command sent to the robot. Only the completed sample is interpreted as an action proposal.
+
+A point $X_\tau$ can be compatible with many target chunks. The network therefore does not learn a separately labeled straight line for every future inference sample. Squared-error regression learns a conditional average velocity at each noisy location and conditioning input. Integrating this learned field transports a distribution of noise samples toward a distribution of actions. The \emph{training reference paths} are straight, while the \emph{learned sampling paths} need not be.
+
+This also resolves an apparent conflict with the earlier warning about averages. A deterministic action regressor averages \emph{final actions given the observation}. The flow network averages \emph{local velocities given the observation, noisy location, and flow time}. Those additional inputs distinguish where a sample currently lies. Different noise samples can travel into different action modes rather than all being mapped to one average endpoint. The distinction between a conditional reference field and the resulting marginal field is part of the flow-matching construction~\citep{floworiginal,flowguide}.
+
+\worked{One coordinate of a cup approach}
+For this scalar example, let $a$ be one normalized target-action coordinate. Suppose its value is $a=0.8$, the sampled noise is $\epsilon=-0.4$, and $\tau=0.25$. Then $X_\tau=-0.1$ and the known reference velocity is $1.2$. If the network predicts $0.9$, its squared error for this coordinate is $(0.9-1.2)^2=0.09$. Gradient descent adjusts $\theta$ to reduce such errors over many examples. This number says nothing about whether the cup was moved successfully. It evaluates a prediction on an artificially noised action, not a physical task outcome.
+
+\subsection{Sampling is integration, not learning}
+At inference there is no known expert endpoint $\mathbf a$. Start from $X_0\sim\mathcal N(0,I)$ and solve
+\begin{equation}
+ \frac{dX_\tau}{d\tau}=v_\theta(X_\tau,\tau;c),
+ \qquad \mathbf a_t=X_1.
+ \label{eq:ode}
+\end{equation}
+Let $\tau_j$ and $\tau_{j+1}$ be adjacent points on the sampling grid, indexed by $j$. An Euler step is
+\begin{equation}
+ X_{\tau_{j+1}}=X_{\tau_j}+
+ (\tau_{j+1}-\tau_j)v_\theta(X_{\tau_j},\tau_j;c).
+ \label{eq:euler}
+\end{equation}
+The changing variable is $X_\tau$, while $\theta$ stays fixed throughout the solve. Numerical integration creates one candidate action chunk. An optimizer update later changes $\theta$ using a training objective; it is a different operation with a different purpose. This ordinary differential equation (ODE) evolves a sample in action space; it does not describe the robot's physical motion.
+
+The original \piz\ setup uses a 50-action chunk and ten flow integration steps~\citep{pi0}. These numbers do not mean that the robot executes ten actions, or that its weights are updated ten times. Nor does reducing the solver step size repair an incorrect learned distribution. It may reduce sampling discretization error while leaving representation error, data bias, and physical control error intact.
+
+Before execution, a sampled chunk must be unnormalized, converted into the command convention, and scheduled. Saturation, latency, and replanning can change the executed trajectory. A future world model must therefore receive records of what was actually applied, including clipped commands.
+
+\checkpoint{What changed?}{During flow sampling, the noisy action variable changes. During execution, the physical state changes. During policy training, the parameters change. Explain which of these three changes occurs when a new Gaussian seed produces a different grasp while the checkpoint remains identical.}
+
+We now have a way to generate flexible motion. The next limitation is coverage: what makes a learned cup-moving skill useful in a different room, with another object, or under a new instruction?
+
+\section{From a demonstrated skill to generalization and experience}
+\subsection{Heterogeneous training in \texorpdfstring{$\pi_{0.5}$}{pi0.5}}
+A robot needs several kinds of knowledge at once. It must identify the requested object, infer a useful subtask, and execute a precise motion. Training only on one cup trajectory cannot provide all of that. \pih\ combines heterogeneous sources, including web multimodal data, data from different robots and environments, and high-level subtask supervision. Its pretraining uses FAST, an action tokenizer that compresses continuous action sequences into discrete tokens; its post-training introduces continuous flow-matching action prediction. At inference, a predicted high-level subtask conditions low-level actions~\citep{pi05}.
+
+For the running example, ``put the cup on the coaster'' might require the currently relevant subtask ``grasp the cup'' before ``place the cup.'' This decomposition helps explain how broad semantic knowledge can influence a short action chunk. It is not a guarantee that the hierarchy is correct. The robot can recognize the cup but misunderstand the target coaster, or choose the correct subtask but fail to establish contact. Generalization must be located: across appearances, object configurations, tasks, environments, or embodiments. These are related but distinct tests.
+
+Broad vision--language training connects images and words; action-labeled training connects those features to commands. A high-level subtask selects the relevant part of an instruction, but the action expert must still map it into executable motion.
+
+Broader training data can improve coverage, but each source must supervise the right function. Web images can teach visual concepts without supplying robot commands. Robot datasets may use different action conventions or omit some measurements. Combining them requires compatible representations, explicit missing-data masks, and a clear account of which examples supervise language and which supervise action.
+
+\subsection{Why successful demonstrations are not enough}
+Suppose the pretrained robot closes its fingers slightly early. The demonstration dataset mostly contains centered grasps, so its next observation is unfamiliar: the cup has moved, but it is not held. Continuing to imitate a clean lift from that observation may make the failure worse. The robot needs information about its own mistakes and recoveries, not only what competent behavior looked like on the expert's distribution.
+
+The difficulty is not merely that the dataset is small. The learner's own choices change the distribution of observations it encounters. A slightly off-center approach creates an off-center grasp image; the next imperfect action creates an even less familiar situation. This feedback can compound errors. The DAgger work formalizes this issue and studies collecting expert labels on states visited by the learner~\citep{dagger}. We use it here to explain the problem, not to claim that all the methods in this chapter implement DAgger.
+
+There are two complementary ways to obtain additional guidance. A person can show what to do in a situation the policy reached. Alternatively, an outcome can tell us that a tried behavior worked better or worse than expected, even without an expert specifying every action. RECAP will provide a concrete example of combining experience and corrections once we have defined the required value and advantage signals in Section~\ref{sec:experience-signals}.
+
+Before learning persistently from many attempts, however, consider an easier and more immediate request: a new user demonstrates a different destination for the cup. The robot should be able to interpret that demonstration now. This motivates changing its conditioning input while retaining the competence already learned in its weights.
+
+\section{Adapting a learned skill to a new demonstration}
+\conceptfigure{synthicl-teaser}{A demonstration changes the question}{Changing demonstration context can change behavior without an optimizer update. Conceptual connection: \citep{synthicl}.}{fig:synthicl-teaser}
+
+\subsection{Context adaptation is a forward computation}
+Let $C_1$ show a cup placed on a coaster and $C_2$ show it placed on a shelf. A context-conditioned policy can produce different actions from the same current observation:
+\begin{equation}
+ \pi_\theta(\mathbf a\mid o,g,C_1)\ne\pi_\theta(\mathbf a\mid o,g,C_2).
+ \label{eq:context}
+\end{equation}
+There is no contradiction in obtaining new behavior while keeping $\theta$ fixed. The conditioning input changed. During earlier training, the network learned how to interpret demonstrations; at inference it applies that learned computation to a new one. This is in-context adaptation, distinct from persistent parameter learning.
+
+For that behavior to be learned, training must make context informative. Consider a training pair in which one trajectory demonstrates a task and another performs the same task from a changed configuration. The policy receives the first as context and predicts actions in the second. Across many such pairs, always following one fixed motion is inadequate: the context tells it which relationship should be preserved. In the cup example, that relationship could be ``this cup goes onto that coaster,'' while positions and camera appearances vary. This is the role of context--task pairing in SynthICL~\citep{synthicl}.
+
+Reading a demonstration conditions a fresh action from the current observation; replaying it repeats old commands at old times. A new grasp can therefore differ while serving the same task.
+
+In SynthICL, context and current images pass through the same frozen DINOv3 visual backbone. A spatiotemporal encoder organizes demonstration features; current-image features query the encoded demonstration through cross-attention. An action decoder then produces flow velocities. A parallel subgoal-image predictor supplies auxiliary training supervision and can be disabled at inference; predicted subgoals are not explicit runtime control guidance~\citep{synthicl}.
+
+\conceptfigure{synthicl}{Two information sources meet}{The current scene describes where the robot is; demonstration context describes the intended relation. Attention combines features from both. This teaching diagram omits architecture details. Conceptual connection: \citep{synthicl,attention}.}{fig:synthicl}
+
+Cross-attention provides a concrete interpretation of ``using context.'' Think of the current features as asking what information in the demonstration is useful now. Queries represent the question, keys provide features against which relevance is scored, and values carry the information to be combined. These are learned vectors, not literal textual questions or a hand-coded search table. Scaled dot-product attention computes compatibility scores, normalizes them with softmax, and forms a weighted sum of the values~\citep{attention}.
+
+Let $\mathbf Q$, $\mathbf K$, and $\mathbf V$ be matrices of current queries, demonstration keys, and demonstration values. Let $d_{\mathrm{key}}$ be the shared query/key feature dimension. With $\top$ denoting transpose, scaled dot-product attention is
+\begin{equation}
+ \operatorname{Attn}(\mathbf Q,\mathbf K,\mathbf V)=\operatorname{softmax}
+ \left(\frac{\mathbf Q\mathbf K^\top}{\sqrt{d_{\mathrm{key}}}}\right)\mathbf V.
+ \label{eq:attention}
+\end{equation}
+Softmax converts scores to nonnegative weights summing to one and is applied over the available keys for each query. For the cup, a query can emphasize the grasp region early and the destination later. Attention performs soft aggregation; it does not necessarily select a unique matching demonstration frame or recover a symbolic task program. Positional and temporal information help distinguish seeing the cup before contact from seeing it after release. Changing the demonstration changes $\mathbf K,\mathbf V$ and the resulting features even with every weight frozen.
+
+The auxiliary subgoal task has a different role. If the training target says what the next meaningful waypoint should look like, errors in that prediction can encourage the shared representation to retain task stage and destination information. The action decoder can benefit from those features without consuming a generated subgoal image at runtime. In SynthICL this is a training aid; it does not insert a separate image planner between observation and action~\citep{synthicl}.
+
+The supervision for actions and the information in a context demonstration also need not be identical. SynthICL uses visual context without requiring the context's action labels at test time~\citep{synthicl}. Thus our generic notation $C$ must not be interpreted as saying every method consumes an observation--action demonstration pair. The target training trajectory still supplies the actions being learned. This distinction matters when designing a demonstration recorder for a user.
+
+\subsection{Synthetic diversity must preserve task relationships}
+Rendering experience offers an intuitive entry point. Varying texture and illumination can improve visual robustness, but a context-conditioned policy must also learn relationships: which object is moved, where it goes, how grasp and release divide the sequence, and how the corresponding target trajectory changes when objects move. If context and target examples are paired incorrectly, visually excellent images teach the wrong task.
+
+SynthICL constructs synthetic context--task pairs with object-centric waypoints and attach/release rules rather than full contact simulation. Its official project reports 79\% average success on 16 unseen real-world tasks with one demonstration~\citep{synthiclproject}. This is evidence for transfer under that protocol; it is not a proof that synthetic attachment rules reproduce grasp physics. The conceptual lesson is that a useful training prior and a physically faithful simulator are different things.
+
+Instant Policy takes another representational route: segmented point clouds and a graph connect demonstrations, the current observation, and future actions. Graph diffusion learns action generation from semantically consistent pseudo-demonstrations~\citep{instant}. Both approaches teach how to infer task structure from context, but their sensing and architecture assumptions differ. We should not transfer a result from one representation to another without checking the required inputs.
+
+\worked{A new destination is not a new learned checkpoint}
+Give the robot a demonstration that places the cup on the left coaster instead of the right. The current action distribution may change immediately. Remove that demonstration and restore the previous context: the behavior should again depend on that previous input. No knowledge has necessarily been consolidated across users. Persistent improvement would require retaining trustworthy examples, training a candidate checkpoint, and testing both the new behavior and prior capabilities. A generated subgoal image is a prediction made by the model; it does not become an independently verified target simply because it looks useful.
+
+\checkpoint{Two adaptation experiments}{Compare changing only the demonstration with changing only the checkpoint. What evidence would isolate context adaptation, and what evidence would establish persistent learning? Keep current observations, task definitions, and evaluation conditions matched.}
+
+So far, a policy maps evidence to actions. To improve it cheaply, we would like to explore consequences before executing every candidate on a robot. Context tells the robot what behavior is intended; a world model would tell it what its actions might cause.
+
+
+\section{Exercises}
+\exercise{clocks}{A policy proposes 12 controls, executes 3, and uses 8 sampling evaluations. The control interval is 0.04 seconds. What physical duration is executed before replanning? Which number determines the optimizer update count?}
+\exercise{context}{Design a matched test that distinguishes response to a demonstration from persistent weight learning. State what is fixed and what changes.}
+\FloatBarrier

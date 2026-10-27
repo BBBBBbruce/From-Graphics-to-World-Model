@@ -1,0 +1,104 @@
+% !TEX program = pdflatex
+\documentclass[11pt,a4paper,oneside]{report}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype}
+\usepackage[a4paper,margin=24mm,headheight=15pt]{geometry}
+\usepackage{amsmath,amssymb,mathtools,booktabs,tabularx,array,longtable}
+\usepackage{graphicx,xcolor,tikz,float,placeins}
+\usetikzlibrary{arrows.meta,positioning,fit}
+\usepackage[font=small,labelfont=bf,justification=raggedright,singlelinecheck=false]{caption}
+\usepackage[authoryear,round,sort]{natbib}
+\usepackage{fancyhdr,titlesec,enumitem}
+\usepackage[colorlinks=true,linkcolor=teal!65!black,citecolor=teal!65!black,urlcolor=teal!65!black,breaklinks=true]{hyperref}
+\usepackage{bookmark}
+\definecolor{ink}{HTML}{18364A}
+\definecolor{accent}{HTML}{237E83}
+\titleformat{\chapter}[display]{\normalfont\huge\bfseries\raggedright\color{ink}}{\chaptertitlename\ \thechapter}{12pt}{\Huge}
+\titleformat{\section}{\normalfont\Large\bfseries\color{ink}}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries\color{ink}}{\thesubsection}{0.7em}{}
+\titlespacing*{\chapter}{0pt}{0pt}{24pt}
+\setlength{\parskip}{4.5pt}
+\setlength{\parindent}{1.1em}
+\setlength{\emergencystretch}{2em}
+\widowpenalty=10000
+\clubpenalty=10000
+\renewcommand{\arraystretch}{1.2}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small\color{ink}Graphics to world models}
+\fancyhead[R]{\small\nouppercase{\leftmark}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\chaptermark}[1]{\markboth{Chapter \thechapter}{}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\piz}{\ensuremath{\pi_0}}
+\newcommand{\pih}{\ensuremath{\pi_{0.5}}}
+\newcommand{\checkpoint}[2]{\par\medskip\noindent\textcolor{accent}{\textbf{Checkpoint --- #1.}} #2\par\medskip}
+\newcommand{\worked}[1]{\subsection*{Worked example: #1}}
+\newcommand{\conceptfigure}[4]{\begin{figure}[htbp]\centering\input{figures/#1}\caption{\textbf{#2.} #3}\label{#4}\end{figure}}
+\newcounter{exercise}[chapter]
+\renewcommand{\theexercise}{\thechapter.\arabic{exercise}}
+\newcommand{\exercise}[2]{\refstepcounter{exercise}\label{ex:#1}\par\medskip\noindent\textbf{Exercise \theexercise.} #2\par}
+\hypersetup{pdftitle={From Graphics to World Models},pdfauthor={From Graphics to World Models contributors},pdfsubject={An undergraduate introduction to robot learning and reliable prediction}}
+\begin{document}
+\hypersetup{pageanchor=false}
+\begin{titlepage}
+\vspace*{12mm}
+{\small\sffamily\color{accent}PUBLIC LEARNING EDITION 1.0\quad / \quad OCTOBER 2026\par}
+\vspace{15mm}
+{\Huge\bfseries\color{ink}From Graphics\par to World Models\par}
+\vspace{9mm}
+{\Large Seeing, predicting, and learning to act\par}
+\vspace{16mm}
+\input{figures/cover}
+\vfill
+\begin{minipage}{0.94\linewidth}
+A photograph shows what a scene looks like. A world model asks what will happen if we act. This book follows that change of question, from rendering and demonstrations to controllable prediction and evidence of better behavior.
+
+For third-year undergraduates in computing and engineering. Includes worked examples, exercises, original diagrams, and a reproducible experiment that runs on a laptop.
+\end{minipage}
+\end{titlepage}
+\pagenumbering{roman}\hypersetup{pageanchor=true}
+\chapter*{How to Read This Book}
+\addcontentsline{toc}{chapter}{How to Read This Book}\markboth{How to Read This Book}{}
+A robot must recognize a cup, move it without knocking it over, and recover from a failed grasp. This book explains that problem and helps you choose a precise research question.
+
+You should be comfortable with vectors, basic derivatives, and short Python programs. Chapter~\ref{ch:foundations} reviews the probability and learning concepts used later. No previous robotics or reinforcement-learning course is required. Advanced policy-gradient details are identified explicitly; the first pass can focus on the meaning of each quantity.
+
+\begin{enumerate}[leftmargin=*,itemsep=4pt]
+\item \textbf{From images to predictions.} Begin with rendering, then distinguish physical state, observation, action, and uncertainty.
+\item \textbf{Policies and demonstrations.} Learn how a distribution generates continuous actions and how demonstration context changes behavior.
+\item \textbf{World models and improvement.} Connect predicted experience to rewards, values, and policy updates. On a first pass, Sections~\ref{sec:policy-gradient}--\ref{sec:fpo} and Appendix~\ref{app:bounds} may be postponed.
+\item \textbf{Controllable prediction.} Specify commands, align data, and preserve the information needed near contact.
+\item \textbf{Evidence of improvement.} Separate prediction tests, decision tests, and closed-loop evaluation.
+\item \textbf{A first research direction.} Run the small experiment, diagnose its failure, and choose a question that matches your interests and resources.
+\end{enumerate}
+
+A cup-moving task introduces the ideas. A connector-insertion task makes hidden contact and small geometric errors visible. These are teaching examples, not reports of experiments. Numbers described as illustrative are chosen for explanation. The laptop experiment is a separate executable toy system; its results do not establish robot performance.
+
+Read each figure before its explanation. Try the exercises before consulting Appendix~\ref{app:solutions}. The symbol list provides one notation system; symbols are also defined locally. A hat marks a prediction or estimate, not a new measurement.
+
+References use author--year citations and link to primary sources. For conference and journal papers, the year names the cited publication. For preprints, the recorded year and version identify the inspected edition. A later file revision is not a new conference publication. The text distinguishes published mechanisms, teaching constructions, and proposals. Research proposals require experiments before they can support performance claims.
+
+This public educational resource has not undergone independent peer review. Corrections are welcome. See \texttt{SOURCES.md} and \texttt{NOTICE.md} for verification and reuse records. All illustrations are original.
+
+\textbf{Reuse.} Copyright 2026, From Graphics to World Models contributors. The original book and illustrations are licensed under Creative Commons Attribution--NonCommercial 4.0 International (CC BY-NC 4.0). Example code, tests, and build scripts use the MIT License. Linked works retain their own terms. See the repository license files for scope and terms.
+
+\tableofcontents
+\input{notation}
+\clearpage\pagenumbering{arabic}
+\input{chapters/foundations}
+\input{chapters/policies}
+\input{chapters/learning}
+\input{chapters/prediction}
+\input{chapters/evaluation}
+\input{chapters/directions}
+\appendix
+\renewcommand{\chaptermark}[1]{\markboth{Appendix \thechapter}{}}
+\input{chapters/appendix-bounds}
+\input{chapters/solutions}
+\clearpage\phantomsection\addcontentsline{toc}{chapter}{Bibliography}
+\bibliographystyle{plainnat}
+\begingroup\small\setlength{\bibsep}{5pt}\raggedright\bibliography{references}\endgroup
+\end{document}

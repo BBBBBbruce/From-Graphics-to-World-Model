@@ -1,0 +1,8 @@
+\begin{tikzpicture}[>=Stealth,every node/.style={font=\small},b/.style={draw=accent,fill=accent!6,rounded corners,align=center,text width=42mm,minimum height=14mm}]
+\node[b] (present) at (0,0) {Present history + command};
+\node[b] (adapter) at (7,0) {Predict transition condition};
+\node[b] (future) at (7,2) {Future-derived training target};
+\draw[->,very thick,accent] (present)--(adapter);
+\draw[->,dashed,ink] (future)--node[right]{supervision only}(adapter);
+\node[align=center,text width=43mm] at (0,2) {No future measurement\\is needed for this input.};
+\end{tikzpicture}

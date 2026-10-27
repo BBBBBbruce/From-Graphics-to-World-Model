@@ -1,0 +1,44 @@
+% !TEX root = ../main.tex
+\chapter{Flow Losses and Likelihood Bounds}
+\label{app:bounds}
+
+The operational picture is already available: compare old and current flow losses on the same action and noise, exponentiate the difference, and weight the resulting clipped surrogate by advantage. The remaining question is why a prediction loss should be relevant to likelihood at all. This appendix supplies that connection. It can be read after the main chapters. First follow the meaning of the bound and the cancellation argument; then examine the schedule and weighting assumptions.
+
+A lower bound can be optimized when the quantity above it is inconvenient to calculate. However, raising the bound does not guarantee that the quantity itself rises by the same amount: the gap can change too. That simple observation is the reason we retain the word \emph{surrogate} throughout the FPO discussion.
+An evidence lower bound, or ELBO, is a tractable variational bound related to log likelihood. Let $B_\theta$ denote an evidence lower bound and $\mathcal K_\theta$ its nonnegative variational gap. For the compatible probabilistic construction, write
+\begin{equation}
+ B_\theta(\mathbf a\mid c)=\log\pi_\theta(\mathbf a\mid c)-\mathcal K_\theta(\mathbf a,c),
+ \qquad \mathcal K_\theta\geq0.
+ \label{eq:elbo}
+\end{equation}
+The nonnegative gap is a Kullback--Leibler (KL) divergence term between latent/path distributions in the variational construction. It is \emph{not} the KL divergence from the old policy to the current policy. FPO's implemented update does not explicitly calculate that gap~\citep{fpo}.
+
+The relation between a denoising loss and this bound depends on the schedule, prediction parameterization, and weighting. To see why an unweighted mean squared error (MSE) is not generally a negative ELBO, let $\sigma\in[0,1]$ parameterize a forward noising process from data to noise. It is a time coordinate here, not a standard deviation. Let $\ell_{\mathrm{snr}}(\sigma)$ be the decreasing log signal-to-noise ratio along that process. It is unrelated to the GAE parameter $\lambda$. Let $w$ be a nonnegative weight function and $\widehat\epsilon_\theta$ the model's noise prediction from a corrupted sample, its noise level and $c$; these inputs are suppressed. Sample $\sigma$ uniformly and draw standard Gaussian noise $\epsilon$. With the target action and conditioning held fixed, denote a representative weighted loss by $\mathcal L^w_\theta$:
+\begin{equation}
+ \mathcal L^w_\theta=\frac12\E_{\sigma,\epsilon}
+ \left[w(\ell_{\mathrm{snr}}(\sigma))\left(-\frac{d\ell_{\mathrm{snr}}}{d\sigma}\right)
+ \|\widehat\epsilon_\theta-\epsilon\|^2\right].
+ \label{eq:weighted}
+\end{equation}
+Here $\sigma$ runs in the forward noising direction, opposite to our noise-to-action $\tau$. Even choosing $w=1$ leaves the schedule derivative and parameterization factors. This is not arbitrary unit-weight velocity MSE. For $w=1$, under the compatible diffusion assumptions and endpoint treatment used in the derivation, the loss equals a negative clean-data ELBO plus a parameter-independent term. More general monotone weightings, including the optimal-transport flow case discussed in FPO's appendix, connect to an \emph{expected bound for noise-perturbed data}, rather than automatically to the same clean-action bound~\citep{fpo,kingma}.
+
+For a compatible bound $B_\theta$, let $b_{\mathrm{const}}$ collect terms independent of the policy parameters. Suppose $\mathcal L^w_\theta=-B_\theta+b_{\mathrm{const}}$ with the same forward process and schedule for old and current models. Use the subscript ``old'' for evaluation at $\theta_{\mathrm{old}}$. The common term cancels in the loss difference:
+\begin{equation}
+ \exp(\mathcal L^w_{\mathrm{old}}-\mathcal L^w_\theta)
+ =\exp(B_\theta-B_{\mathrm{old}}).
+ \label{eq:cancel}
+\end{equation}
+It is therefore unnecessary to calculate an absolute bound to form the difference. But cancellation does not turn a bound ratio into an exact action-likelihood ratio. In the clean-data case, Equation~\eqref{eq:elbo} gives
+\begin{equation}
+ \exp(B_\theta-B_{\mathrm{old}})
+ =\frac{\pi_\theta(\mathbf a\mid c)}{\pi_{\theta_{\mathrm{old}}}(\mathbf a\mid c)}
+   \exp(\mathcal K_{\mathrm{old}}-\mathcal K_\theta).
+ \label{eq:gap}
+\end{equation}
+The gap terms need not cancel.
+
+For an illustrative bound calculation, suppose an old model has log density $-2.0$ and gap $0.5$, so its bound is $-2.5$. A new model with log density $-2.1$ and gap $0.1$ has a higher bound, $-2.2$, despite a slightly lower exact density. This arithmetic is not an FPO experiment; it shows why the bound identity alone cannot guarantee a sample-wise likelihood increase. For the noise-perturbed interpretation, it is even more important to retain the precise bound being compared. Lowering a surrogate loss is not a sample-by-sample guarantee of increased exact density or physical return.
+
+Finite Monte Carlo introduces another distinction. Even if a loss average estimates its expectation without bias, exponentiating the difference generally produces a biased estimate of the exponentiated expected difference. More noise/time samples can reduce variance, but cannot convert the surrogate into an exact likelihood calculation. Loss scaling also matters: summing rather than averaging over action dimensions changes the exponent. A policy implementation must record schedule, time sampling, weighting, dimensional reduction, and numerical stabilization together. Those details determine what is being optimized.
+
+\FloatBarrier

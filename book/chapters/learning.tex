@@ -1,0 +1,363 @@
+\chapter{World Models, Rewards, and Policy Improvement}
+\label{ch:story}
+The policy in Chapter~\ref{ch:policy} can generate actions and read demonstrations. Now it needs to compare consequences. We first construct imagined experience, then define reward and advantage, and finally derive an update. The detailed gradient and FPO sections are optional on a first reading; the later reliability argument does not require reproducing those derivations.
+
+\section{Imagining consequences with an action-conditioned world model}
+\conceptfigure{ctrl-teaser}{A generated future becomes an input}{Following the return arrow makes this a policy-in-the-loop experiment. Prediction errors can affect later decisions. Conceptual connection: \citep{ctrl}.}{fig:ctrl-teaser}
+
+\subsection{The interface is part of the model}
+A learned dynamics model supplies a distribution over future observations or latent states. Let $p_\phi$ denote this conditional distribution, with parameters $\phi$, and let a hat mark a predicted observation. For an action chunk,
+\begin{equation}
+ \widehat o_{t+1:t+H}\sim p_\phi(\,\cdot\mid h_t,\mathbf a_t),
+ \label{eq:world}
+\end{equation}
+This distribution has a different role from the policy distribution: the policy proposes actions, while the world model predicts their consequences.
+
+Both models may use flow matching, but they generate different objects. For the policy, the clean training target is an action chunk. For the world model, it is a future observation or latent trajectory. A \emph{latent} is an encoded representation of an observation, used to reduce the size or organize the information on which prediction operates. Decoding converts it back into an image when a visual policy needs one. A shared generative technique does not make the two models interchangeable: one chooses an intervention and the other predicts what follows it. A model can generate a plausible cup-lifting video yet fail this action-conditioned task if it shows the cup lifting when the commanded gripper never touches it.
+
+A usable interface needs a shared action convention, camera layout, time spacing, and treatment of robot state. If the policy produces relative Cartesian displacements and the world model expects joint-space commands, an adapter is required. Its inputs, kinematic assumptions, and clipping must be explicit. Visual conditioning on an end-effector pose is not equivalent to simulating torque-driven contact. It conveys where the robot is meant to be, but contact feasibility remains something the learned dynamics must represent or external checks must constrain.
+
+Ctrl-World adapts a pretrained video diffusion model using joint multiview prediction, frame-level pose conditioning, and sparse pose-conditioned memory. Its described adapter converts joint-velocity commands to joint configurations and then uses forward kinematics to obtain Cartesian poses~\citep{ctrl}. These conversion steps are essential context for interpreting ``action controllability.''
+
+\conceptfigure{ctrl}{An occluded cup still has a history}{A remembered view can preserve earlier geometry. It is not a new measurement of current contact. Conceptual connection: \citep{ctrl}.}{fig:ctrl}
+
+\subsection{Why multiple views and memory matter}
+The wrist camera can observe the grasp closely but lose sight of the destination. An external camera can show the destination while hiding the fingers behind the cup. Joint prediction lets evidence from one view constrain another. Independent plausible views are insufficient: one could show a held cup while another shows it on the table. Consistency means they describe the same underlying event, not merely that each image looks realistic.
+
+History and memory address a related temporal ambiguity. Recent observations indicate motion; selected older observations retain information that becomes occluded. If the cup moves behind the gripper, a memory of its earlier pose may help maintain identity and scene structure. But memory cannot reveal friction or a hidden object never observed, and recycling a generated image into memory can preserve an error as if it were evidence. Keeping observed and predicted history distinguishable is therefore a proposed engineering safeguard, not an automatic property of attention.
+
+WEAVER predicts multiview image latents and proprioception from actions, recent history, and sparse older memory. It adds latent reward and critic heads so candidate outcomes can be scored without repeatedly decoding images for a large external judge. Its reward supervision comes from RoboMeter progress labels; the critic uses bootstrapped targets~\citep{weaver}. These heads make scoring cheaper, but do not create task truth from dynamics alone. In the inspected WEAVER version, actions are joint-position differences, with an additional velocity-to-position adapter for interfacing with other action conventions~\citep{weaver}. This differs from Ctrl-World's Cartesian-pose conditioning. An adapter must preserve timing and command meaning; matching vector dimensions is insufficient.
+
+\conceptfigure{weaver}{One representation, two uses}{Decoding and scoring serve different consumers. A low-cost score still depends on the quality of its supervision. Conceptual connection: \citep{weaver}.}{fig:weaver}
+
+\subsection{Two uses of prediction: choosing now and learning for later}
+Suppose the robot proposes three cup approaches. It could predict each outcome, select the most promising candidate, execute a prefix, observe again, and repeat. That is \emph{planning with a model}. The decision changes, but the policy's weights can remain fixed. Alternatively, it can retain many imagined attempts and use their scores to train a new policy. That is \emph{learning from model-generated experience}. Later decisions may improve without rerunning the same search. These are different uses of a predictive model; WEAVER investigates both planning and policy improvement~\citep{weaver}.
+
+Neither use makes every generated future equally trustworthy. Different samples from one model may represent genuine ambiguity in the partially observed scene, arbitrary generation variation, or an incorrect learned dynamics distribution. Repeated samples expose variation under that model, but a model that consistently imagines a cup sticking to an empty gripper can still be consistently wrong. This will become important when we decide which generated experiences may supervise learning.
+
+\subsection{What an imagined rollout actually contains}
+A policy-in-the-loop rollout alternates action generation and predicted observations. After the first imagined lift, the policy receives the imagined wrist and external images and selects its next chunk. The resulting distribution can drift away from real data because the policy now reacts to model errors. By contrast, replaying recorded actions through a world model tests predictions along a known action sequence. Both are useful, but they answer different questions. WEAVER's reported policy-evaluation protocol replays recorded actions; Ctrl-World studies policy-in-the-loop interaction~\citep{weaver,ctrl}.
+
+To train from a rollout, retain more than video: the conditioning context, observations, sampled actions, rewards, behavior-policy identity, world-model identity, and endpoint semantics. A terminated episode is different from an imagination horizon that ends before task completion. A terminal failure may have zero future value under the chosen task definition; a truncated rollout may need a bootstrap estimate. Confusing the two systematically changes the learning target.
+
+This creates a familiar approximation-versus-cost question with a new consequence. A cheaper model need not preserve every pixel to be useful, but it must preserve the distinctions that determine which actions are better. For the cup, a tiny error at finger contact can reverse the ranking of two grasp approaches even when average image error is small. Efficient sampling, latent compression, and cache reuse should therefore be assessed against downstream decisions as well as reconstruction metrics.
+
+WEAVER reduces different parts of this cost in different ways: factorized spatial/temporal attention and patch-token dropping reduce model work, cached memory/history avoids recomputing fixed context during denoising, and rectified-flow post-training distills generated targets for fewer sampling evaluations~\citep{weaver}. These mechanisms should not be collapsed into one claim that ``memory makes the model faster.'' Sparse memory controls the information retained, while caching reuses a particular computation. Distillation reduces sampling work but can inherit teacher errors. A useful experiment would hold the action candidates fixed and check whether their outcome ranking survives each approximation, including difficult contact cases.
+
+One timing example comes from WEAVER's Appendix Tables 3--4. Here NFE means number of function evaluations by the sampler, and a key--value (KV) cache stores reusable attention computations. At NFE $=16$, generating a 10-second segment on one H100 takes 14.65 seconds for Ctrl-World and 4.78 seconds for WEAVER in that benchmark; disabling WEAVER's KV cache changes 4.78 to 6.54 seconds~\citep{weaver}. The latter is about a 27\% time reduction from caching. It isolates a computational benefit, not the value of memory for accuracy. Different hardware, horizons, model variants, or evaluation procedures are \emph{not comparable}. These measurements are not a latency promise for another model and hardware configuration.
+
+The deeper cost question is how far to trust a prediction before returning to observed evidence. Model-based policy optimization has studied short imagined branches starting from real data as a way to limit the effect of accumulated model error~\citep{mbpo}. The reason is intuitive in the cup example: a branch that starts from an observed grasp needs to predict fewer uncertain contacts than one that invents the entire approach, grasp, lift, and placement. This motivates a design tradeoff; it does not establish that a particular short horizon is valid for our task.
+
+We now have a way to produce experience, real or imagined. Yet a sequence of observations and actions does not specify what should improve. We need rewards, returns, and a principled comparison with what the policy already expected.
+
+\section{From outcomes to rewards, values, and advantages}
+
+\label{sec:experience-signals}
+Demonstrations told the robot \emph{which actions were taken}. Experience tells it \emph{what happened after actions it chose}. To improve from that experience, the robot needs to turn outcomes into comparisons. We will build that comparison in three steps: define what counts as desirable, accumulate that signal over the future, and compare an attempted action with what was normally expected from the same situation.
+\subsection{The score is a modeling choice}
+Suppose success means that the cup rests upright on the coaster after release. A simple episodic reward is zero at intermediate steps and one at verified completion. This gives a clear outcome but a delayed signal: an early approach action receives no immediate reward even if it is necessary for success. Alternatively, dense rewards might score distance, grasp progress, or elapsed time. Such choices provide more feedback but introduce preferences that can be exploited. A robot rewarded for bringing the cup near the coaster might hover forever without releasing it.
+
+This is why a task instruction and a reward play different roles. The instruction is part of what conditions behavior; the reward is the criterion used to assess experience. They should express compatible intentions, but one does not automatically implement the other. A trajectory can be conditioned on ``place the cup'' while a poorly designed reward only measures proximity. Learning then follows the actual reward signal, including its omissions.
+
+Let $r_t$ be the reward for the transition from step $t$ to step $t+1$, $\gamma\in[0,1]$ the discount per step, and $T_{\mathrm{ep}}$ the terminal step index. The return $G_t$ is the discounted sum through that episode:
+\begin{equation}
+ G_t=\sum_{k=0}^{T_{\mathrm{ep}}-t-1}\gamma^k r_{t+k}.
+ \label{eq:return}
+\end{equation}
+We use $r_t$ for the reward associated with the transition starting at $t$; other indexing conventions shift it by one. A return combines future rewards, whereas an immediate reward scores one transition. For a chunk-based decision, the reward over its executed prefix and the discount to the next decision must be aggregated consistently. One cannot use the discount per physical step as the discount per chunk without considering the chunk duration.
+
+\worked{Why an unrewarded approach can still be useful}
+Use an illustrative three-decision task: approach, grasp-and-lift, then place-and-release. Let the rewards on a successful trial be $(0,0,1)$. With $\gamma=0.9$, the returns seen from those decisions are $(0.81,0.9,1)$. The approach had no immediate reward but a positive future return. On a failed trial with rewards $(0,0,0)$, all three returns are zero. The numbers provide a way to credit earlier actions for later outcomes, although a single trajectory cannot prove which action was responsible. The temporal credit-assignment problem is precisely how to use such delayed evidence to improve decisions~\citep{rlintro}.
+
+Define the value function $V^\pi$ as the expected return when policy $\pi$ continues from the current information:
+\begin{equation}
+ V^\pi(h_t,g,C)=\E_{\pi}[G_t\mid h_t,g,C].
+ \label{eq:value}
+\end{equation}
+A neural critic $V_\nu$ approximates this function with parameters $\nu$. The critic answers ``how much return should I expect from here?'' The policy answers ``what action should I take?'' Their outputs and objectives differ even if they share some representation. Policy improvement does not train the policy to become the value network~\citep{rlintro}.
+
+With only terminal success reward, no other reward, $\gamma=1$, and a consistent episode definition, expected return equals success probability. Under those assumptions, a well-calibrated value of $0.6$ would mean a 60\% success probability. A progress score, discounted return, or hybrid progress/TD prediction does not automatically have that interpretation. Even in the binary case, a learned estimate still needs calibration before its decimal value is treated as a probability.
+
+A value prediction compresses the answer to many possible future attempts. Starting from the same cup pose, the policy may grasp successfully in some trials and slip in others; the value is the expected return over those continuations. Change the policy, and that expectation can change even though the physical scene is identical. The superscript $\pi$ in $V^\pi$ reminds us which continuation behavior is being evaluated. A difficult grasp can have low value for a weak policy and high value for a more capable one.
+
+\subsection{How a critic learns and why a baseline helps}
+Let $N$ be the number of training samples, $i$ index a sample, and $G_i^{\mathrm{target}}$ denote its fixed return target. Let $\operatorname{sg}$ be the stop-gradient operator: it leaves a value unchanged but gives it zero derivative in this update. The critic loss $\mathcal L_V$ fits the targets by minimizing
+\begin{equation}
+ \mathcal L_V(\nu)=\frac{1}{N}\sum_{i=1}^{N}
+ \left(V_\nu(h_i,g_i,C_i)-\operatorname{sg}(G_i^{\mathrm{target}})\right)^2.
+ \label{eq:critic}
+\end{equation}
+A completed observed return supplies a Monte Carlo target. A frozen target-critic parameter copy is denoted by $\bar\nu$. A bootstrapped target instead uses rewards collected over a shorter interval plus another value prediction. One-step temporal-difference (TD) learning uses a target such as $r_t+\gamma V_{\bar\nu}(h_{t+1})$, with appropriate terminal masking and with the target treated as fixed for that update. Bootstrapping reduces the need to wait for an episode to finish, but introduces dependence on the critic's own predictions.
+
+The reason this target is sensible is the recursive structure of return. The return is today's reward plus the discounted remainder. If the remainder is estimated by the value at the next information state, we obtain the one-step Bellman relationship
+\begin{equation}
+ V^\pi(h_t)=\E_{\pi}\!\left[r_t+\gamma V^\pi(h_{t+1})\mid h_t\right],
+ \label{eq:bellman}
+\end{equation}
+with terminal continuation value zero and task/context suppressed. The expectation includes the policy's action at $h_t$ and the environment's response. This relationship is developed in Section~3.5 of Sutton and Barto; Section~6.1 explains the distinction between a Monte Carlo return and a bootstrapped TD target~\citep{suttonbarto}. With a sufficient history it describes the intended expectation; a compressed or incomplete representation can introduce approximation error.
+
+For a toy numerical update, suppose the critic predicts $0.30$ before a reach, there is no immediate reward, and it predicts $0.60$ after the reach. At $\gamma=0.9$, the one-step target is $0.54$. The discrepancy $0.54-0.30=0.24$ says the current prediction is lower than this bootstrapped target. It does not say we observed a successful placement, and the next-state estimate might itself be wrong. This is the distinction between a measured outcome and a learning target assembled partly from predictions.
+
+The action-value function $Q^\pi(h_t,a_t)$ is expected return after choosing $a_t$ and then following $\pi$. Define the advantage $\mathcal A^\pi$ as its difference from the state value:
+\begin{equation}
+ \mathcal A^\pi(h_t,a_t)=Q^\pi(h_t,a_t)-V^\pi(h_t).
+ \label{eq:advantage}
+\end{equation}
+Task and context arguments are suppressed here, but are still present. An advantage compares an action with the policy's expected behavior in that situation. It is not simply the immediate reward, and a successful action need not have a large positive advantage if success was already nearly certain.
+
+\worked{An advantage is a comparison, not another reward}
+At one fixed cup observation, imagine only two abstract choices: approach from the left or the right. Suppose the current policy chooses each with probability $1/2$, and their true expected returns are $0.8$ and $0.4$. Then $V^\pi=0.5(0.8)+0.5(0.4)=0.6$, so their advantages are $+0.2$ and $-0.2$. The right approach can succeed sometimes and still have negative advantage because it is worse than the current average. If the policy shifts toward the left approach, both its expected return and the baseline for future comparisons change. In a real task we do not know these exact branch values; sampled outcomes and critics estimate them.
+
+\worked{Same success, different improvement signal}
+For an illustrative undiscounted success-only task, suppose the critic predicts $0.8$ before an easy centered grasp and $0.3$ before a difficult occluded grasp. Both trials succeed. Define the estimated advantage $\widehat{\mathcal A}$ as the observed return minus the critic prediction, $\widehat{\mathcal A}=G-V_\nu$. Their estimated advantages are $0.2$ and $0.7$. A failed difficult grasp would have advantage $-0.3$. This is an estimator from sampled outcomes, not proof that one individual action caused the entire outcome. Repeated data and an appropriate credit-assignment scheme are needed to distinguish good decisions from luck.
+
+Let $d_t=1$ at a genuine terminal transition and $d_t=0$ otherwise. Using a fixed critic $V_{\bar\nu}$, define the TD residual $\delta_t$ by
+\begin{equation}
+ \delta_t=r_t+\gamma(1-d_t)V_{\bar\nu}(h_{t+1})-V_{\bar\nu}(h_t),
+\end{equation}
+Generalized advantage estimation (GAE) combines successive residuals with weights $(\gamma\lambda)^k$, where $\lambda\in[0,1]$ controls how quickly later residuals are downweighted~\citep{gae}. The tradeoff is between noisy long-horizon evidence and biased short-horizon predictions. At an artificial rollout cutoff, bootstrapping should reflect truncation rather than falsely declaring a terminal state. In a learned world, both the rewards and next observations may already be approximate, so a numerically stable advantage computation can still rank actions incorrectly.
+
+\subsection{A first use of advantages: learning from experience with RECAP}
+We can now return to the robot that closes its gripper too early. Autonomous trials reveal what happens under its own behavior; a person can supply a corrective reapproach; returns and value estimates provide a way to compare the recorded actions. RECAP, associated with $\pi^*_{0.6}$, combines demonstrations, autonomous experience, and human interventions using advantage-conditioned policy training~\citep{recap}.
+
+The key idea is to make the improvement label an input to the policy during training. Let $b_{\mathrm{adv}}$ be a bin or indicator derived from the estimated advantage. Write the conditioned policy schematically as $\pi_\theta(\mathbf a\mid o,g,b_{\mathrm{adv}})$. Here $o$ is the current observation; the available history and any other fixed inputs are suppressed. The policy sees which recorded behavior was associated with which condition. At inference, requesting the improvement condition favors the corresponding learned behavior. This resembles using a task label to select a behavior family, except the label now describes estimated quality relative to a baseline. It is still necessary to train the conditional mapping; merely adding the desired label to an arbitrary policy would not create the skill.
+
+RECAP uses a binary improvement indicator and treats expert corrections as positive examples under its procedure~\citep{recap}. Its update has a supervised form, but the labels incorporate reward-bearing experience, so it is more than cloning an undifferentiated set of demonstrations. At the same time, it does not use the policy-gradient surrogate developed in the next two sections. We now have one concrete route from advantages to improved behavior. The next route asks how to directly adjust a stochastic policy in a direction that increases expected return.
+
+\subsection{Likelihood is not reward}
+The policy also assigns a likelihood to actions, but this is a different quantity. In continuous action space $\pi_\theta(a\mid h)$ is a \emph{density}; the probability of a region is its integral over that region. The probability of exactly one real-valued action is usually zero, and a density may exceed one. A log density can be positive or negative and depends on coordinates and units. None of this says whether the action is good.
+
+An early-close grasp can have high likelihood because it is common under the current policy and still receive a poor return. A rare successful recovery can have low likelihood and high advantage. Reinforcement learning uses reward-bearing evidence to change the distribution; it does not declare actions good because the model already prefers them. This distinction is particularly useful when translating from language-model training, where log probabilities and reward scores often appear in the same loss expression.
+
+\section{Why a policy gradient can learn without differentiating physics}
+\label{sec:policy-gradient}
+\subsection{The direction we want before the derivative we need}
+Continue the two-approach example. Let $p$ be the probability of choosing left and $J(p)$ the corresponding expected return. Then
+\begin{equation}
+ J(p)=0.8p+0.4(1-p)=0.4+0.4p.
+ \label{eq:two-action-return}
+\end{equation}
+Increasing $p$ improves the expected return. There is no need to change the physical outcome of a particular left attempt by a differentiable amount; we change how frequently that kind of attempt is selected. The real difficulty is that a neural policy has many parameters and the two branch returns are not known in advance. We need a gradient estimator built from sampled actions and their outcomes~\citep{policygradient}.
+
+This is why the policy's log likelihood appears in reinforcement learning. Its gradient tells us how to change the weights to assign more density to an observed action. The return or advantage tells us whether and how strongly to use that direction. The log likelihood provides a direction in parameter space; it does not supply the task's notion of goodness.
+
+\subsection{A gentle log-derivative argument}
+For a fixed observation, imagine sampling an action from $\pi_\theta$ and receiving a score $f(a)$ that we can evaluate but cannot differentiate. Assume that $f$ is independent of $\theta$, differentiation can pass under the integral, and the policy has suitable parameter-independent support. With $\nabla_\theta$ denoting differentiation with respect to the policy parameters,
+\begin{align}
+ \nabla_\theta\E_{a\sim\pi_\theta}[f(a)]
+ &=\int f(a)\nabla_\theta\pi_\theta(a)\,da\nonumber\\
+ &=\E_{a\sim\pi_\theta}
+ [f(a)\nabla_\theta\log\pi_\theta(a)].
+ \label{eq:score}
+\end{align}
+The second line uses $\nabla\pi=\pi\nabla\log\pi$. We differentiate the probability assigned to a sampled action, not the environment's response to that action. In a trajectory, the same idea applied to the product of policy probabilities yields a sum of score terms. The environment's transition factors do not contribute parameter derivatives when the environment is fixed and independent of $\theta$. Reward-to-go and baselines then lead to the usual policy-gradient estimator~\citep{policygradient}.
+
+Subtracting a baseline depending on the observation but not the sampled action leaves the expected score-function gradient unchanged, since $\E_a[\nabla_\theta\log\pi_\theta(a\mid h)]=0$. A good value baseline can reduce variance. This is why a critic is useful even when the policy does not differentiate through the critic or environment during its update.
+
+The baseline has a practical interpretation in the cup example. Easy scenes tend to produce successes under many actions, whereas difficult scenes produce failures under many actions. Comparing each outcome against its scene-dependent expectation helps separate ``this was an easy starting point'' from ``this action did better than expected here.'' It does not remove all randomness or identify causality from one trial; it improves the statistical signal used across trials.
+
+Let $\theta_{\mathrm{old}}$ denote the parameters of the policy that collected a batch of $N$ samples. Hold each history $h_i$, sampled action $a_i$, and estimated advantage $\widehat{\mathcal A}_i$ fixed. A local gradient surrogate $S$ is
+\begin{equation}
+ S(\theta)=\frac1N\sum_{i=1}^N
+ \log\pi_\theta(a_i\mid h_i)\,\widehat{\mathcal A}_i.
+ \label{eq:local}
+\end{equation}
+At the collection policy, its gradient estimates a policy-gradient direction under the relevant assumptions. It is not the full expected-return objective for arbitrary $\theta$, and repeatedly optimizing it on stale data does not maintain that interpretation. Compact expressions involving log policy and advantages should be read with these sampling and stop-gradient conventions in mind. Differentiating the sampling distribution and the advantage again inside the same empirical surrogate would be a different computation.
+
+\subsection{Old and current policies in PPO}
+
+One gradient step changes the policy that generated the data. After several steps, the batch still contains the same actions, but the current policy would choose them with different frequencies. Reusing the batch can save collection effort, yet it needs a controlled comparison with the collection policy. This motivates recording an old-policy snapshot and asking, for each sampled action, how its density has changed. Proximal Policy Optimization (PPO) uses that comparison in a local surrogate and limits the incentive to make large changes~\citep{ppoguide}.
+Define $\rho_i(\theta)$ as the current-to-behavior action-density ratio:
+\begin{equation}
+ \rho_i(\theta)=
+ \frac{\pi_\theta(a_i\mid h_i)}{\pi_{\theta_{\mathrm{old}}}(a_i\mid h_i)}.
+ \label{eq:ppo-ratio}
+\end{equation}
+Many papers call this $r(\theta)$. We use $\rho$ to avoid confusing it with the environmental reward $r_t$. The denominator belongs to the fixed policy that collected the batch; the numerator changes during training. Their densities must use the same action coordinates and conditioning. At identical parameters, the ratio is one.
+
+For intuition, temporarily return to discrete choices. If a left approach had probability $0.5$ when the data were collected and probability $0.6$ now, its ratio is $1.2$. It receives 20\% more weight in that action comparison. In continuous space the analogous comparison uses densities. This action ratio does not by itself correct every change in the distribution of visited states, which is one reason PPO is treated as a local update with fresh collection rather than a license to optimize one batch indefinitely.
+
+Let $\epsilon_{\mathrm{clip}}>0$ be the clipping width, and let $\operatorname{clip}(x,l,u)$ restrict $x$ to $[l,u]$. PPO maximizes the clipped surrogate $S_{\mathrm{PPO}}$~\citep{ppo}
+\begin{equation}
+ S_{\mathrm{PPO}}(\theta)=\frac1N\sum_{i=1}^{N}
+ \min\!\left[
+ \rho_i\widehat{\mathcal A}_i,
+ \operatorname{clip}(\rho_i,1-\epsilon_{\mathrm{clip}},1+\epsilon_{\mathrm{clip}})\widehat{\mathcal A}_i
+ \right],
+ \label{eq:ppo}
+\end{equation}
+For positive advantage, increasing the ratio helps until the clipped branch removes the incentive to increase it further. For negative advantage, decreasing the ratio helps until the lower clip removes that incentive. The minimum is sign-sensitive; it does not simply clamp every gradient whenever a ratio leaves the interval.
+
+\worked{What clipping does and does not prevent}
+Let $\epsilon_{\mathrm{clip}}=0.2$ and $\widehat{\mathcal A}=0.7$. Raising a ratio from $1.0$ to $1.3$ would raise the unclipped contribution from $0.7$ to $0.91$, but the clipped objective uses $0.84$. There is no further reward from that term for going above $1.2$. For $\widehat{\mathcal A}=-0.3$ and ratio $0.7$, the minimum selects $-0.24$ rather than $-0.21$, so further reducing that ratio earns no benefit from the term. These plateaus do not project the policy into a hard distance ball. Other samples, shared parameters, or other loss terms can still move its distribution, and there is no universal policy-distance guarantee from clipping alone.
+
+We now have the ingredients for a policy update: collected actions, estimated advantages, and an old/current density comparison with clipping. A simple Gaussian policy can evaluate that density directly from its mean and covariance. A flow policy instead defines its action distribution through a sequence of transformations. Generating a sample follows those transformations; evaluating exact density must also account for how they expand or compress probability mass. Consequently, easy sampling does not imply cheap exact likelihood evaluation~\citep{floworiginal,fpo}.
+
+This is where the earlier flow-matching loss becomes useful again. We know how to evaluate a velocity-prediction error on a chosen action without reconstructing its original sampling path. FPO uses differences of such losses to build a surrogate for the old/current comparison. The next section will first follow that computational recipe and then explain the more delicate probabilistic interpretation.
+
+\section{Flow Policy Optimization: using a loss difference as a surrogate}
+\label{sec:fpo}
+\conceptfigure{fpo-teaser}{Keep both ways around the obstacle}{Separated valid action modes need not have a valid average. A flexible distribution can retain both; rewards must then favor useful samples. Conceptual connection: \citep{fpo}.}{fig:fpo-teaser}
+
+\subsection{Score a collected action with the flow model}
+Flow Policy Optimization (FPO), introduced in \emph{Flow Matching Policy Gradients}, adapts a PPO-style update to flow policies using conditional flow-matching losses~\citep{fpo}. The action used as a target is now a sampled rollout action or chunk. It need not be an expert demonstration. The external experience supplies an advantage that tells the update whether to favor or disfavor that sample.
+
+For one collected pair $(c_i,\mathbf a_i)$, draw $M$ noise/time pairs $(\epsilon_{im},\tau_{im})$, indexed by $m$. Form the same noised action and reference velocity for the old and current networks. With $\ell_\theta$ denoting the per-sample flow loss under the chosen weighting convention, define the Monte Carlo loss estimates $\widehat{\mathcal L}_{\theta,i}$ and $\widehat{\mathcal L}_{\mathrm{old},i}$, and the FPO surrogate ratio $\tilde\rho_i$:
+\begin{align}
+ \widehat{\mathcal L}_{\theta,i}&=\frac1M\sum_{m=1}^M
+ \ell_\theta(c_i,\mathbf a_i;\epsilon_{im},\tau_{im}),\nonumber\\
+ \widehat{\mathcal L}_{\mathrm{old},i}&=\frac1M\sum_{m=1}^M
+ \ell_{\theta_{\mathrm{old}}}(c_i,\mathbf a_i;\epsilon_{im},\tau_{im}),\nonumber\\
+ \tilde\rho_i(\theta)
+ &=\exp\left(\widehat{\mathcal L}_{\mathrm{old},i}-\widehat{\mathcal L}_{\theta,i}\right).
+ \label{eq:fpo-ratio}
+\end{align}
+The paired comparison is important. If the two networks are identical, the same inputs give the same losses and the estimated ratio is exactly one up to numerical error. Using different noise draws for the two sides would add a spurious difference even before any policy change. The old weights are frozen; if the noise/time samples are refreshed, the old loss must be evaluated consistently on those refreshed samples.
+
+Substitute $\tilde\rho$ into the clipped objective in Equation~\eqref{eq:ppo}. The surrogate ratio itself has derivative
+\begin{equation}
+ \nabla_\theta\tilde\rho
+ =-\tilde\rho\nabla_\theta\widehat{\mathcal L}_\theta.
+ \label{eq:fpo-gradient}
+\end{equation}
+When the clipped objective is not on a plateau, positive advantage means that maximizing the surrogate tends to reduce the current loss on that action. For negative advantage, the local direction is reversed. The clipping and interactions among samples qualify this intuition; the algorithm does not independently set the likelihood of every action.
+
+\worked{A paired loss calculation}
+Suppose a collected cup-lift chunk has estimated advantage $0.7$. On shared noise/time samples, let the frozen policy loss be $1.10$ and the current loss be $0.95$. The surrogate ratio is $e^{0.15}\approx1.162$. With clipping width $0.2$, this term remains below the positive-advantage plateau. If the current loss drops to $0.70$, the ratio becomes $e^{0.40}\approx1.492$ and the positive contribution is clipped at $1.2\times0.7=0.84$. These are illustrative loss values, not paper hyperparameters or an experiment. In particular, $1.162$ is not an estimated task-success probability.
+
+\subsection{Why the ratio is a surrogate}
+A flow loss can be related to a variational lower bound on log likelihood, but the relationship depends on the noise schedule, prediction parameterization and loss weighting. The gap between a bound and the corresponding likelihood can change during training. Thus an exponentiated loss difference is not an exact likelihood ratio. Finite noise sampling adds estimation error, and changing the loss normalization changes the exponent. Appendix~\ref{app:bounds} develops the argument and defines the evidence lower bound (ELBO). The operational rule is simple: retain the word \emph{surrogate}, record the loss convention, and verify improvement outside the training objective.
+
+\subsection{Where the gradients go}
+The computational graph for an update contains the current velocity network evaluated on noised versions of collected actions. Observations, actions, advantages, old losses, and the reference velocity are treated as fixed data. Gradients pass through $\widehat{\mathcal L}_\theta$ to $\theta$. They do not need to pass through robot transitions, the world model that generated the rollout, or the ODE sampling trajectory that originally produced the action. This is the score-surrogate route to optimization, not differentiable control through a simulator~\citep{fpo,fpoblog}.
+
+In an automatic differentiation system, a differentiable world model need not be part of the policy-loss gradient calculation. A proposed implementation should explicitly stop gradients through the stored rollout and advantage estimates. A critic can be trained in a separate step using its own targets. The policy and critic may improve together operationally while having different parameter updates.
+
+FPO's original control experiments train policies from scratch; they do not validate a complete pretrained, in-context, learned-world-model pipeline~\citep{fpo}. Adopting its update for that pipeline is a design proposal. The proposal must be tested against simpler alternatives before the added complexity is justified.
+
+\subsection{Online is not synonymous with on-policy}
+\emph{Online versus offline} describes whether new experience is collected during learning or a fixed dataset is used. \emph{On-policy versus off-policy} describes the relationship between the behavior that generated data and the policy update. An on-policy method collects recent behavior-policy batches and limits how far updates move before recollection. An off-policy method is designed to use experience from other or older behavior policies. Both kinds update network weights.
+
+A fixed real dataset can train a world model. A policy can then collect fresh imagined trajectories inside that fixed model and perform an on-policy FPO-style update. Collection is online relative to the learned environment while there is no new physical interaction. Such data are fresh for the policy in that model; they are not automatically representative of the real robot. Conversely, online physical collection can feed an off-policy replay algorithm. The two labels answer different questions and should both appear in a training specification.
+
+\checkpoint{One complete update}{Explain why storing an old loss without its noise/time convention is insufficient; why $\widehat{\mathcal A}$ is fixed during the policy step; and why the exponentiated loss difference is a surrogate rather than an exact likelihood ratio. Then identify which objects require new values when the behavior-policy snapshot changes.}
+
+\section{Two published ways to learn from imagined experience}
+FPO supplies an update mechanism, but it does not decide how the learned environment is trained, how reward is checked, or when model refreshes occur. RISE and VLAW make these surrounding choices concrete. Neither uses FPO as its published policy update. They should be read as distinct system designs whose ideas may inform a later integration.
+
+\subsection{RISE: a fixed learned environment during policy improvement}
+RISE combines a dynamics model with a progress/value model. It warms up the policy on real experience, then produces imagined data labeled with advantages for advantage-conditioned flow training. Its dynamics and value models remain frozen during the self-improvement loop~\citep{rise}. This fixes the learned environment while the policy changes, making the loop easier to analyze but leaving model errors available for exploitation.
+
+\conceptfigure{rise-components}{Prediction and evaluation can fail separately}{A progress estimate describes the predicted event; it does not independently prove that event was physically possible. Conceptual connection: \citep{rise}.}{fig:rise-components}
+
+Let $\mathcal V_{\mathrm{RISE}}$ denote RISE's task-conditioned progress/value predictor. Its chunk score $\widehat{\mathcal A}_{\mathrm{RISE}}$ averages predicted score changes from the initial observation across $H$ future observations. In our notation,
+\begin{equation}
+ \widehat{\mathcal A}_{\mathrm{RISE}}(o_t,\mathbf a_t)
+ =\frac1H\sum_{k=1}^{H}
+ \bigl[\mathcal V_{\mathrm{RISE}}(\widehat o_{t+k},g)-\mathcal V_{\mathrm{RISE}}(o_t,g)\bigr].
+ \label{eq:rise}
+\end{equation}
+It discretizes advantages into conditioning bins and requests the preferred bin when sampling. The progress/value model combines temporal-progress supervision with TD learning. This operational chunk advantage should not be silently equated with every textbook advantage estimator, and its score is not automatically a calibrated success probability. The reported implementation limits consecutive imagined interactions to two to constrain accumulated error~\citep{rise}.
+
+\conceptfigure{rise-loop}{Improve behavior in a fixed learned environment}{The quality condition enters supervised action learning. This is distinct from the flow-loss ratio used by FPO. Conceptual connection: \citep{rise}.}{fig:rise-loop}
+
+For the cup, short imagination may ask whether an approach and close sequence improves the predicted situation. Keeping rollouts short reduces how much generated history feeds back into itself, but it may cut off the eventual slip or release failure. A value model can estimate what follows the cutoff, yet that simply moves part of the approximation burden into the value estimate. Short horizons and bootstrapping are complementary design choices, not independent guarantees of reliability.
+
+\FloatBarrier
+\conceptfigure{vlaw-teaser}{Branch from observed experience}{More generated samples are useful only if their consequences and labels are reliable. Quantity does not turn prediction into observation. Conceptual connection: \citep{vlaw}.}{fig:vlaw-teaser}
+
+\subsection{VLAW: refresh the simulator with real successes and failures}
+VLAW alternates real rollout collection, world-model adaptation, synthetic generation, filtering, and policy training. It refreshes Ctrl-World using accumulated real successes and failures mixed with DROID. The reported reward model is fine-tuned on first-iteration real success labels. Policy training uses successful real trajectories plus synthetic trajectories accepted by the reward model~\citep{vlaw}. This is success-filtered flow-matching training, not FPO or an obligatory separate TD-critic update.
+
+\conceptfigure{vlaw}{A failure can teach the dynamics}{A failed grasp is useful evidence for the world model even when it is excluded from positive-only policy imitation. Conceptual connection: \citep{vlaw}.}{fig:vlaw}
+
+Real failures are particularly valuable for a world model trained mainly on successful demonstrations. An early-close cup attempt teaches that the cup may remain on the table while the gripper rises. This negative outcome is a valid dynamics target even though it is not a successful policy demonstration. The same episode can therefore belong in the dynamics dataset and be excluded from positive-only policy training. Data utility depends on which model is being trained.
+
+\begin{table}[htbp]\centering\small
+\caption{Published update mechanisms remain distinct. This table summarizes algorithmic roles, not a performance ranking.}
+\begin{tabularx}{\linewidth}{@{}p{19mm}YY@{}}\toprule
+Method & Experience-to-policy mechanism & Learned environment or feedback schedule\\\midrule
+RECAP & Advantage-conditioned policy training & Values and real experience/corrections support improvement labels.\\
+RISE & Advantage-conditioned flow training on imagined data & Dynamics and value frozen during the policy-improvement loop.\\
+VLAW & Flow matching on successful real and accepted synthetic data & World model refreshed with accumulated real data; reward training uses first-iteration labels in reported experiments.\\
+FPO & Advantage-weighted clipped surrogate from old/current flow losses & Update rule does not itself specify or validate a learned world model.\\\bottomrule
+\end{tabularx}\label{tab:methods}
+\end{table}
+
+These systems suggest several possible integration choices. One could begin with success filtering, add advantage conditioning, or test FPO as a separate optimizer. Combining all of them by name would obscure the actual objective. The first implementation should state precisely which data enter each loss, which parameters are fixed, and which evidence determines whether the candidate is adopted. The decisive remaining issue is whether the imagined successes deserve trust.
+
+\section{The false-success trap and the evidence that breaks it}
+\subsection{An impossible grasp can look successful}
+Return to the early-close failure. Suppose the generated video depicts the cup attaching to the gripper even though the fingers miss it. The cup then appears upright on the coaster. A task evaluator may correctly recognize that the \emph{depicted final scene} satisfies the task while the video is wrong about the consequences of the actions. An optimistic reward model may accept the sample and training may reinforce the associated behavior. This is an illustrative failure mechanism, not a claim about a particular published trial.
+
+Two questions must therefore remain distinct. Does the observed or depicted outcome satisfy the task? And is the predicted future consistent with what those actions could cause from that initial state? A visual outcome label answers the first question more directly than the second. The second requires action-aligned evidence and may remain uncertain even after careful video inspection. A generated trajectory is not a measured transition.
+
+There are several possible errors. The world model may hallucinate contact. The evaluator may miss a visible failure. The action adapter may encode the wrong frame. The task definition may reward lifting while the actual goal requires stable placement. These diagnoses lead to different fixes. A single scalar penalty cannot identify which component failed.
+
+\subsection{The VLAW reward audit: keep the denominator}
+VLAW Appendix C, Table 3 reports an audit of 40 human-labeled trajectories. Direct yes/no decisions are compared with requiring the model's ``yes'' token probability to exceed $0.8$~\citep{vlaw}. Table~\ref{tab:audit} restates the counts and shows the arithmetic, without turning the audit into a physical-validity certificate.
+
+\begin{table}[htbp]\centering\small
+\caption{VLAW reward audit (40 trajectories): source counts from Appendix C, Table 3, v2~\citep{vlaw}; rates below are calculated from those counts. Positive means accepted as successful.}
+\begin{tabular}{@{}lrr@{}}\toprule
+Quantity & Direct yes/no & Threshold $>0.8$\\\midrule
+True positives (TP) & 15 & 10\\
+False positives (FP) & 8 & 2\\
+False negatives (FN) & 7 & 12\\
+True negatives (TN) & 10 & 16\\\midrule
+Accepted trajectories & 23 & 12\\
+False discoveries: FP/(TP+FP) & $8/23=34.8\%$ & $2/12=16.7\%$\\
+False-positive rate: FP/(FP+TN) & $8/18=44.4\%$ & $2/18=11.1\%$\\
+Success recall: TP/(TP+FN) & $15/22=68.2\%$ & $10/22=45.5\%$\\
+Accuracy: (TP+TN)/40 & $25/40=62.5\%$ & $26/40=65.0\%$\\\bottomrule
+\end{tabular}\label{tab:audit}
+\end{table}
+
+For positive-only policy training, the accepted subset is especially relevant. The stricter filter accepts 12 trajectories, two of which are human-labeled failures: $2/12$, or approximately 16.7\% false discoveries in that sample. This is different from asking what fraction of the 18 actual failures slipped through, which gives $2/18$. Accuracy combines accepted successes and rejected failures over all 40 examples and answers a third question.
+
+The reduction in false acceptance comes with a tradeoff: 12 of 22 human-labeled successes are rejected. A conservative filter can improve the purity of its accepted data while reducing coverage of useful successful behavior. Moreover, the accepted sample is small; its observed fraction is not a population guarantee. If the policy or world model changes the distribution of generated videos, the error rates may change too.
+
+A token probability above $0.8$ is a property of the evaluator's output distribution. It is not an 80\% guarantee of task success and certainly not an 80\% guarantee of action-conditioned physical correctness. Calibration would need a defined target event and independent labels on a relevant distribution. Human video labels are useful for visible task outcomes, but reviewers can miss subtle physics errors. Agreement between two models is also limited when they share training data, representations, or blind spots.
+
+\subsection{Correct the component for which evidence exists}
+If the cup did not move in an independently observed execution, align the executed actions and measured future observations and use them to correct the world model. The target says what actually happened. A judgment that the generated video is ``unacceptable'' does not by itself specify the correct future image sequence. For the evaluator, supply independently checked task labels and audit the resulting errors on held-out examples. These are distinct supervision channels.
+
+An unverified synthetic success should be withheld from positive policy training. That does not automatically justify a negative policy update. The proposed action might have been reasonable while the simulator was wrong, or it might truly have failed. Without trustworthy outcome evidence, its advantage is unresolved. Treating every simulator inconsistency as proof of a bad action can discard useful behavior and train against artifacts of the checker.
+
+For our proposed system, useful safeguards could include action/time alignment checks, justified geometric or contact constraints, observed-versus-generated provenance, and explicit uncertain labels. These are design proposals beyond the published VLAW success filter. They should be evaluated for both false acceptance and false rejection, since an overly restrictive validity checker can suppress successful strategies.
+
+\worked{An evidence-directed correction}
+Suppose three records concern the same cup attempt: a command log, a generated video showing a lift, and an external camera recording showing a miss. The recording, if correctly synchronized, contradicts the prediction. It supplies a dynamics target for the actual command. If the evaluator accepts the real miss video, that additionally exposes an evaluator error. If it accepts only the generated lift video, it may be judging depicted success correctly while remaining unable to verify physical validity. The policy update should use the trusted real outcome under the chosen reward rule, not an arbitrary penalty for the existence of disagreement.
+
+Without a robot, held-out recordings permit retrospective checks of known actions and observed futures. They cannot establish the outcome of every newly proposed action. Device-free work can nevertheless establish valuable prerequisites: interface consistency, correct estimator arithmetic, provenance completeness, calibration on available labels, and clearly specified failure tests. These are evidence of preparation and bounded behavior, not evidence of physical policy improvement.
+
+\section{Putting the learning loop together}
+The learning loop can now be stated with explicit interfaces. Demonstration context helps specify a new task or behavior. A flow policy proposes action chunks. An action-conditioned world model predicts consequences. Reward and value estimates turn those consequences into training signals. A chosen policy update changes persistent weights, and independent evaluation determines whether that candidate represents progress. The phrase \emph{In-Context World Model} does not by itself specify whether demonstrations condition the policy, the dynamics, or both; its meaning must be specified for each system.
+
+\begin{figure}[htbp]\centering
+\begin{tikzpicture}[node distance=7mm and 9mm,box/.style={draw=accent,rounded corners,fill=accent!5,align=center,text width=39mm,minimum height=13mm,font=\small},arr/.style={-{Latex[length=2mm]},thick,draw=ink}]
+\node[box] (ctx) {Verified context\\and current observation};
+\node[box,right=of ctx] (pol) {Flow policy $\pi_\theta$\\proposes actions};
+\node[box,right=of pol] (wm) {World model $p_\phi$\\predicts consequences};
+\node[box,below=of wm] (score) {Reward/value estimates\\and uncertainty};
+\node[box,left=of score] (update) {Candidate weight update\\FPO or another recipe};
+\node[box,left=of update] (eval) {Independent evaluation\\adopt, reject, or defer};
+\draw[arr] (ctx)--(pol);\draw[arr] (pol)--(wm);\draw[arr] (wm)--(score);
+\draw[arr] (score)--(update);\draw[arr] (update)--(eval);
+\node[draw=ink,dashed,align=center,text width=142mm,font=\small,below=10mm of update] (real) {Observed real futures correct dynamics; independently checked labels correct evaluators.\\Unverified synthetic successes are withheld from policy training.};
+\end{tikzpicture}
+\caption{Original synthesis schematic for the proposed learning loop. It connects ideas from the cited methods; it is not a reproduced architecture or evidence of an implemented system. Arrows show information flow, not a gradient path through the world model.}
+\label{fig:proposed}
+\end{figure}
+
+Three boundaries organize the proposal. Inference-time adaptation changes context features while the deployed weights remain fixed. Persistent learning changes a candidate checkpoint using retained data and a specified objective. Acceptance of that checkpoint requires evidence outside the simulator and scorer that supplied its training feedback. A single demonstration, a higher imagined return, and an independently measured improvement are different achievements.
+
+To check understanding, trace one cup episode from beginning to end. Identify the observation, the action convention, the demonstration information, the sampled chunk, its executed prefix, the reward rule, the value target, the advantage estimator, the policy-loss gradient, and the evidence supporting the outcome. If one of those nouns has no concrete record or definition, the integration is not yet specified. Chapter~\ref{ch:engineering} examines the prediction model and its data contract. Chapter~\ref{ch:evaluation} develops the training and evaluation cycle. Chapter~\ref{ch:directions} turns them into feasible first research projects.
+
+\checkpoint{Explain the loop in five minutes}{Use the cup example without paper names. Explain where inputs change, where weights change, which predictions can be wrong, and which observations could disprove an apparent improvement. Then attach each paper name only to the component or learning recipe it actually contributes.}
+\FloatBarrier
+
+\section{Exercises}
+\exercise{return}{For rewards 0, 0, 1 and discount 0.9, compute the return at the first step. If the value estimate there is 0.6, compute return minus value. What changes if the success was only imagined?}
+\exercise{surrogate}{Old and current estimated flow losses are 0.8 and 0.6. Compute the FPO surrogate ratio. Why is this not proof that the action probability increased by that exact factor?}
+\FloatBarrier

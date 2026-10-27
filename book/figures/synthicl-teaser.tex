@@ -1,0 +1,15 @@
+\begin{tikzpicture}[>=Stealth,every node/.style={font=\small}]
+\foreach \x/\title in {0/Demonstration,7/New scene}{
+\fill[accent!5,rounded corners] (\x,-.4) rectangle ++(6,3.2);
+\draw[ink,thick] (\x+.3,0)--++(5.4,0);
+\draw[ink] (\x+1,.15) ellipse (.6 and .18);
+\draw[ink] (\x+5,.15) ellipse (.6 and .18);
+\node at (\x+3,2.45) {\title};
+\node at (\x+1,-.1) {\scriptsize left};\node at (\x+5,-.1) {\scriptsize right};
+}
+\draw[accent,thick] (2.5,1.6)--(2.65,.7)--(3.35,.7)--(3.5,1.6);
+\draw[->,accent,very thick] (2.6,.65) .. controls (1.6,.6) .. (1,.4);
+\draw[accent,thick] (10.5,1.6)--(10.65,.7)--(11.35,.7)--(11.5,1.6);
+\draw[->,accent,very thick] (10.7,.65) .. controls (9.4,.5) .. (8,.4);
+\node[align=center] at (6.5,-1) {Same relation: cup to left coaster.\\Different geometry: a new movement is needed.};
+\end{tikzpicture}

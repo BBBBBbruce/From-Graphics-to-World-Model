@@ -1,0 +1,202 @@
+% !TEX root = ../main.tex
+\chapter{From Imagined Experience to Evidence of Improvement}
+\label{ch:evaluation}
+
+Return to the connector paused at the socket rim. Our model can now generate consequences for a specified action. We might try a small push, a slight rotation, or a withdrawal followed by realignment. Generating these alternatives is only the beginning. The learning system still needs a definition of progress, a way to estimate consequences beyond the short rollout, and an update rule that improves the policy without turning a model's mistake into a habit.
+
+This chapter follows that chain. We first separate the learning stages, then build an imagined trajectory and its targets, compare update mechanisms, and examine unreliable feedback. Finally we ask what outside evidence could reject the claim that the policy improved. The equations form a teaching example unless explicitly attributed to a paper.
+
+\section{A predictor becomes an environment through a loop}
+In recorded-action prediction, the action sequence is already known. In policy-in-the-loop imagination, the next action depends on what the model just generated. If the model invents that the connector has seated, the policy may release it. The resulting imagined trajectory is internally consistent with the invented event, even though the real system would have dropped an unseated part.
+
+Let $\widehat h_t$ contain the starting real history followed by the imagined actions and generated observations. Let $R_\psi$ be a task-conditioned reward model with parameters $\psi$, and $\widehat r_t$ its predicted reward. The operator $\operatorname{append}$ adds the new action and observation to the history. One imagined step is
+\begin{align}
+ a_t&\sim\pi_\theta(\cdot\mid\widehat h_t,g,C),&
+ \widehat o_{t+1}&\sim p_\phi(\cdot\mid\widehat h_t,a_t),\label{eq:middle-rollout}\\
+ \widehat r_t&=R_\psi(\widehat h_t,a_t,\widehat o_{t+1},g,C),&
+ \widehat h_{t+1}&=\operatorname{append}(\widehat h_t,a_t,\widehat o_{t+1}).
+ \label{eq:middle-score}
+\end{align}
+A predicted reward is a task score, not an observed outcome. A separate value function $V_\nu$ estimates future return under a specified policy and environment. The symbols $\theta$, $\phi$, $\psi$, and $\nu$ retain their policy, dynamics, reward, and critic roles throughout the book. Shared implementations must still specify which parameter blocks each loss updates.
+
+The desired return is defined in the real environment. The imagined return is defined under $p_\phi$ and $R_\psi$. Optimization sees the latter directly. If the learned transition or score is wrong in regions the policy visits, maximizing imagined return can increase the gap between the two. Freezing the model prevents it from changing during an update; it does not make it correct.
+
+\section{Learn the world, learn the task, then improve behavior}
+Each training stage adds a different kind of evidence. Unlabeled video can supervise temporal prediction. Action-aligned video adds control semantics. Task rewards say which outcomes matter. None of these alone supplies a policy that is better than the behavior in the dataset.
+
+\conceptfigure{middle-dreamer}{Three training questions}{Dynamics, task feedback, and policy improvement have distinct targets, even when they share a network. Conceptual connection: \citep{dreamer4}.}{fig:middle-dreamer}
+
+Dreamer 4 gives a concrete staged example: pretrain tokenizer and dynamics; fine-tune with task inputs, policy and reward heads while retaining prediction training; then update policy and value heads on imagined experience with the transformer frozen. Agent tokens attend to other modalities, but the reverse attention is blocked, preventing direct task-token influence on dynamics. Its main policy update uses a variant of preference-based maximum a posteriori policy optimization (PMPO), using advantage signs with a behavioral prior~\citep{pmpo}. Shortcut training is a different objective. The principal evidence is Minecraft, not physical manipulation~\citep[Alg.~1 and Sec.~3.3]{dreamer4}.
+
+\begin{table}[H]\centering\small
+\caption{A teaching ledger for staged learning, informed by Dreamer 4. It distinguishes evidence and update roles without prescribing a robot implementation.}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{25mm}YY@{}}\toprule
+Stage & Evidence or targets & What changes\\\midrule
+Representation and dynamics & Observed images, temporal order, available aligned actions & Encoder/decoder first; then predictive dynamics using the learned representation.\\
+Task learning & Actions and task rewards on recorded experience & Policy/reward prediction; retained dynamics training protects the predictive function.\\
+Imagination improvement & Generated trajectories, learned rewards, bootstrapped targets & Policy and value heads in the frozen-transformer recipe.\\\bottomrule
+\end{tabularx}
+\end{table}
+
+For insertion, the conceptual benefit is modular diagnosis. If predicted motion ignores commands, study the dynamics and action interface. If plausible failures receive high scores, study reward supervision. If a correct advantage causes the wrong update direction, study optimization. A single aggregate training loss cannot identify which of these failed.
+
+Task-conditioned reward also requires a precise event. ``Looks inserted'' is not automatically equivalent to electrical connection, a latch engaging, or passing a specified retention test. Before training a reward predictor, choose the event the available evidence can establish. A visual dataset may support a visible-seating label and an uncertain category. A stronger functional success label requires the corresponding measurement. The value function then predicts return for that defined reward, not a more demanding unstated notion of success.
+
+\section{Build a target before taking a gradient}
+Suppose fixed world and reward models generate a rollout with $H_{\mathrm{roll}}$ transitions. Reset the local step index to $t=0$ at its start. Let $V_{\bar\nu}$ be a fixed critic used to build targets. As before, $\gamma$ discounts one decision interval and $\lambda\in[0,1]$ weights longer returns. Define the continuation mask $m_t=1-d_t$, where $d_t$ identifies a terminal transition under the task definition. In imagination, this terminal label is also a model estimate and must be checked. The bootstrapped imagined return target is $\widehat G_t^{(\lambda)}$, and its advantage estimate is $\widehat{\mathcal A}_t$:
+\begin{align}
+ \widehat G_{H_{\mathrm{roll}}}^{(\lambda)}&=V_{\bar\nu}(\widehat h_{H_{\mathrm{roll}}},g,C),\nonumber\\
+ \widehat G_t^{(\lambda)}&=\widehat r_t+\gamma m_t\left[(1-\lambda)V_{\bar\nu}(\widehat h_{t+1},g,C)
+                                      +\lambda\widehat G_{t+1}^{(\lambda)}\right],\label{eq:middle-return}\\
+ \widehat{\mathcal A}_t&=\operatorname{sg}\left(\widehat G_t^{(\lambda)}-V_{\bar\nu}(\widehat h_t,g,C)\right).
+ \label{eq:middle-advantage}
+\end{align}
+The recursion runs backward for $t=H_{\mathrm{roll}}-1,\ldots,0$ from the rollout boundary. At a true terminal transition, $m_t=0$ removes continuation value. A computational cutoff is a truncation, so the boundary critic estimates the unobserved continuation. This is the book's indexing convention, not a transcription of Dreamer 4's equation. All targets are fixed during a policy update.
+
+\worked{Delayed success through a short window}
+Consider two imagined transitions with rewards $\widehat r_0=0$ and $\widehat r_1=1$, where the second transition is terminal. For illustration choose $\gamma=0.9$, $\lambda=1$, and $V_{\bar\nu}(\widehat h_0,g,C)=0.4$. Then $\widehat G_1^{(\lambda)}=1$, $\widehat G_0^{(\lambda)}=0.9$, and $\widehat{\mathcal A}_0=0.5$. The first movement receives positive credit even though its immediate reward was zero. If the final success was hallucinated, the arithmetic still returns $0.5$. Correct credit assignment cannot rescue incorrect evidence.
+
+Let $\E_t$ average over sampled rollout positions. The critic parameters $\nu$ can be fitted to the fixed targets with the illustrative regression loss
+\begin{equation}
+ \mathcal L_V(\nu)=\E_t\!\left[\left(V_\nu(\widehat h_t,g,C)-\operatorname{sg}(\widehat G_t^{(\lambda)})\right)^2\right].
+ \label{eq:middle-critic}
+\end{equation}
+This equation explains the role of value fitting; it does not replace a paper's distributional value loss. The reward model scores one transition. A value predicts accumulated future reward under a policy and transition model. A separate benchmark that asks a vision--language model (VLM) to assess ``value'' is not automatically training this Bellman-style critic.
+
+\subsection{Freeze the right objects}
+For a likelihood-based or flow-loss-surrogate policy update, store the rollout, scores, behavior-policy identity, and advantage targets as data. Differentiate the current policy objective through the current policy parameters. Do not let the policy loss reduce its difficulty by modifying its own target or the reward labels in the same gradient calculation.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[>=Stealth,every node/.style={font=\small},b/.style={draw=accent,rounded corners,align=center,text width=42mm,minimum height=14mm}]
+\node[b] (fixed) {Frozen world + scorer\\generate experience};
+\node[b,right=12mm of fixed] (data) {Stored actions, rewards\\fixed advantages};
+\node[b,below=12mm of fixed] (policy) {Current policy $\theta$\\evaluated on stored data};
+\node[b,right=12mm of policy] (loss) {Policy loss\\update $\theta$ only};
+\draw[->] (fixed)--(data);\draw[->] (data)--(loss);
+\draw[->] (policy)--(loss);
+\draw[->,very thick,accent] ([yshift=-2mm]loss.west)--node[below]{gradient}([yshift=-2mm]policy.east);
+\end{tikzpicture}
+\caption{Original diagram for a policy update from stored experience. The upper arrows supply fixed data; the emphasized arrow is the policy gradient. Separate critic fitting uses Equation~\eqref{eq:middle-critic}. This is not differentiable planning through dynamics.}
+\label{fig:middle-gradients}
+\end{figure}
+
+A frozen function can still have derivatives with respect to its inputs. Thus ``the world weights are frozen'' and ``we do not differentiate through the rollout'' are different statements. A differentiable planning method might deliberately propagate input gradients through fixed dynamics. The proposal in Figure~\ref{fig:middle-gradients} instead uses sampled experience and detached targets. This distinction matters when translating the story into autodiff code.
+
+\section{Choose an optimizer without merging different algorithms}
+The choice of world model does not determine the policy objective. Four mechanisms can use scored trajectories while learning in different ways.
+
+\begin{table}[H]\centering\small
+\caption{Policy-update choices. These are alternatives to compare, not interchangeable names for one algorithm.}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{28mm}YY@{}}\toprule
+Mechanism & How feedback enters & Question before adoption\\\midrule
+Success filtering & Accept trajectories, then imitate their actions & How many accepted examples are false successes? What useful failures are discarded?\\
+Advantage conditioning & Add a quality/advantage condition to supervised action learning & How are labels estimated, and which condition is selected at inference?\\
+Group-relative RL & Normalize returns within comparable rollout groups and optimize a policy objective & Are groups comparable and policy probabilities tractable under the chosen parameterization?\\
+Flow policy optimization & Use a specified flow-loss surrogate with fixed advantages & Are noise coupling, normalization, clipping and behavior versions correct?\\\bottomrule
+\end{tabularx}
+\end{table}
+
+RISE keeps its learned dynamics and value environment fixed during its self-improvement stage and uses advantage-conditioned flow training. VLAW refreshes its world model with real policy experience and uses filtered imagined successes in its policy-improvement process~\citep{rise,vlaw}. The first highlights a stable training environment; the second highlights distribution change and model refresh. Neither makes the entire combined loop an FPO algorithm. Chapter~\ref{ch:story} gives their fuller treatment.
+
+For an FPO-style candidate, recall the Chapter~\ref{ch:story} surrogate
+\begin{equation}
+ \tilde\rho_t(\theta)=\exp\left(\widehat{\mathcal L}_{\mathrm{old},t}
+                              -\widehat{\mathcal L}_{\theta,t}\right),
+ \label{eq:middle-fpo}
+\end{equation}
+with old and current losses computed under the specified shared noise/time convention and normalization~\citep{fpo}. This is an exponentiated loss difference, not an exact action-density ratio. The clipped objective can use $\tilde\rho_t$ and fixed $\widehat{\mathcal A}_t$, but it inherits the surrogate's assumptions. Reducing the current flow loss tends locally to increase this surrogate ratio; that statement does not establish increased real return.
+
+A simple check is that identical parameters and matched noise samples give ratio one. Another is that changing a sum over action coordinates to a mean changes the exponent and therefore the update scale. Such checks establish implementation semantics. They are not evidence that FPO beats filtering on connector insertion. Dreamer 4's PMPO policy update, its shortcut dynamics loss, HaWMPO's group-relative update, and FPO must retain their separate meanings.
+
+\section{When the model is wrong, which signal should change?}
+Suppose an imagined push makes the connector pass through the socket wall. The reward model sees a seated connector and returns a high score. We would like to reduce the influence of that trajectory. But now consider a harmless change in cable shape that differs from the one recorded reference. It may have a large visual prediction error without making the proposed action physically bad.
+
+These cases separate three questions: whether the future is well predicted, whether the action is desirable, and whether the predicted outcome can be verified. A reliability estimate addresses the first or third according to its supervision. It is not automatically a negative action advantage.
+
+\conceptfigure{middle-hawmpo}{A score for success needs a score for reliability}{The reliability assessor is another fallible learned component. Its supervision and errors need their own evaluation. Conceptual connection: \citep{hawmpo}.}{fig:middle-hawmpo}
+
+HaWMPO learns a hallucination assessor from generated-versus-observed futures using feature, depth, motion, and image-quality proxies. At rollout time it uses generated frames, actions, and context without the observed future. Its assessor audit uses 50 LIBERO chunks; physical evaluation covers two tasks with 20 trials per method per task~\citep[Secs.~3 and 4.3--4.6]{hawmpo}. These proxy labels and small samples limit the evidence for reliability.
+
+In the book's notation, let $u_{\mathrm{hall}}\in[0,1]$ be the estimated hallucination severity and $\chi$ the penalty strength. Let $\widehat r$ be the raw predicted chunk reward and $\widetilde r$ the adjusted reward. HaWMPO's reward-softening rule is
+\begin{equation}
+ \widetilde r=(1-\chi u_{\mathrm{hall}})\widehat r.
+ \label{eq:reward-soft}
+\end{equation}
+These adjusted rewards enter group-relative policy optimization (GRPO), which compares rewards within rollout groups. Figure~\ref{fig:middle-hawmpo} separates the task score from the reliability estimate.
+
+For nonnegative $\widehat r$ and $\chi\in[0,1]$, the rule attenuates reward without reversing its sign. Applied to negative rewards, it makes them less negative. This algebraic property matters before transferring the rule to a new reward convention. The assessor estimates a learned proxy; it cannot certify physical validity.
+
+\worked{Confidence is not an outcome}
+Suppose two candidate insertion chunks each receive $\widehat r=1$. With illustrative $\chi=0.5$, severity estimates $u_{\mathrm{hall}}=0.2$ and $u_{\mathrm{hall}}=0.8$ give adjusted rewards $0.9$ and $0.6$. All else equal, the feedback favors the first chunk. Neither number establishes that the connector seated. A checker blind to hidden latch failure can accept both.
+
+Audit appearance and physical validity separately: include a sharp image of impossible contact, a blurry but valid withdrawal, an occluded result, and a plausible alternative cable configuration. Select thresholds and penalty strengths on a development set. Test on held-out episodes with a stated label definition. Agreement with independent failure labels is stronger evidence than correlation with the proxy used to train the checker.
+
+\subsection{Keep uncertainty attached to the thing it describes}
+Variation across sampled futures measures variation under the learned generator. It may reflect real ambiguity, model uncertainty, or sampling artifacts. Agreement across models can still hide shared bias. An interval around a measured success proportion reflects trial sampling under a particular protocol. None is a universal confidence score for deployment.
+
+For insertion, uncertainty about a hidden latch suggests requesting an observation or limiting the claim, not declaring the action a failure. A large predicted penetration error suggests a problem with the generated transition. A verified physical jam is evidence about the executed behavior. Keeping these records separate lets the next training cycle address the correct cause.
+
+\section{Prediction, decision quality, and improvement need different tests}
+The most useful external test begins with a question the model could get wrong. Fix a recorded initial history and its applied actions, generate the future, and compare with independently observed consequences. This removes the policy's freedom to change the test while we measure prediction.
+
+\conceptfigure{middle-oracle}{Hold the action fixed}{This comparison tests consequences. It does not let a new policy choose different actions or establish policy improvement. Conceptual connection: \citep{worldoracle}.}{fig:middle-oracle}
+
+WorldOracle evaluates recorded-action futures against real executions along outcome correctness, spatial alignment, interaction-region fidelity, and multiview action coherence. Its outcome score uses a VLM; the multiview metric aggregates reference-grounded arm alignment rather than directly proving 3D consistency. Limited task/embodiment coverage, single-reference ambiguity, and unequal adaptation conditions constrain comparisons~\citep[Sec.~3 and App.~F]{worldoracle}. Its paired evidence can expose false predicted success, but does not by itself establish closed-loop policy improvement.
+
+\subsection{Test the distinction the controller cares about}
+For our connector, average image quality is insufficient. A useful prediction test might ask whether a fixed push produces visible insertion, a rim collision, or withdrawal, with ``unobservable'' available when the recording cannot decide. Compare near-contact and free-space segments separately. Retain failures in the denominator. If multiple views disagree about the same event, inspect synchronization and visibility before blaming the model.
+
+One observed future is also only one realization. If a cable can settle in two physically valid ways, an alternative prediction should not be called impossible solely because it differs from that recording. Conversely, passing through a solid rim is not rescued by stochasticity. Task-relevant labels and geometric evidence help distinguish plausible diversity from a wrong consequence.
+
+Prediction quality matters for decisions when it helps choose an action. Let $\mathcal U$ be a fixed candidate-action set, $\widehat Q(h,a)$ a model-based score, and $Q_{\mathrm{ref}}(h,a)$ an independently estimated outcome value under the stated continuation rule. Let $a^\star$ maximize the model score and $a_{\mathrm{ref}}^\star$ maximize the reference value. Use $\arg\max$ to select a maximizing candidate. Define selection regret as the reference value lost by choosing $a^\star$:
+\begin{equation}
+ a^\star=\arg\max_{a\in\mathcal U}\widehat Q(h,a),
+ \qquad
+ \operatorname{regret}=Q_{\mathrm{ref}}(h,a_{\mathrm{ref}}^\star)
+                     -Q_{\mathrm{ref}}(h,a^\star).
+ \label{eq:middle-regret}
+\end{equation}
+Fix a tie rule when several candidates have the same score. The candidates can also be action chunks, provided their duration, scoring horizon, and continuation policy are defined consistently. A single recorded action does not reveal the outcomes of all alternatives. Without reference evidence for those alternatives, regret cannot be reported as a measured result.
+
+Finally, policy improvement requires comparing closed-loop behavior. A candidate policy reacts to its own observations and therefore visits different states from its baseline. Prediction on the old policy's recordings does not establish performance on those new states. A later matched physical evaluation should specify task configurations, reset rules, time limits, interventions, success criteria, and trial counts. Repeated attempts and excluded failures must remain visible.
+
+\begin{table}[H]\centering\small
+\caption{Three claims and the evidence needed for each. Passing one row does not establish the next.}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{27mm}YY@{}}\toprule
+Claim & Appropriate evidence & What remains unresolved\\\midrule
+Predicts consequences & Held-out paired futures under recorded actions & Unobserved counterfactual actions and new policy states.\\
+Improves decisions & Candidate ranking or selection against independent outcome evidence & Repeated feedback and state distribution under deployment.\\
+Improves behavior & Matched closed-loop baseline/candidate trials & Generalization beyond the tested tasks and conditions.\\\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Use denominators that preserve the failure}
+Suppose a checker accepts 20 generated clips and independent review finds four false successes. In this illustrative audit, false discoveries among accepted clips are $4/20=20\%$. That is not the false-positive rate among all actual failures; the latter needs the number of actual failures considered by the checker. Also report rejected true successes, or a checker can appear conservative merely by accepting almost nothing.
+
+For policy comparison, suppose a baseline succeeds on 12 of 20 trials and a candidate on 15 of 20. The observed difference is 15 percentage points, with just three additional successes. It is an estimate under the trial protocol, not a precise universal gain. Report uncertainty at the independent trial or configuration level rather than pretending that thousands of video frames are independent successes. If the same configurations are paired across methods, preserve that pairing in the analysis.
+
+Ablations should isolate the claim: same real-data budget with and without imagined data; same initialization and imagined batch with filtering versus the proposed optimizer; fixed versus refreshed world model under a specified refresh-data budget. Changing data quantity, scorer, and optimizer together may yield a useful system comparison, but cannot identify which component caused the difference.
+
+\section{One proposed iteration, from evidence back to evidence}
+We can now state a coherent research loop from separately testable components. Begin with a baseline and a precise task event. Use recorded attempts to test action alignment, representation loss, prediction errors, and the evaluator. Freeze versions for one bounded imagined-data cycle. Generate short branches from independent real contexts, retain lineage and uncertainty, and train a candidate with an explicitly chosen objective. Then test the candidate against evidence outside the generator and scorer that supplied its feedback.
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+\item \textbf{Specify.} Record the action/controller contract, observable success event, data splits, baseline and comparison budget.
+\item \textbf{Check prediction.} Replay held-out recorded controls; inspect contact outcomes and the decision-relevant representation.
+\item \textbf{Collect imagination.} Pin world, reward, reliability and behavior-policy versions; store generated histories and truncations.
+\item \textbf{Update.} Fit value targets separately where needed; apply the chosen policy loss with explicit gradient boundaries.
+\item \textbf{Evaluate.} Measure prediction and evaluator regressions; obtain independent decision or closed-loop evidence appropriate to the claim.
+\item \textbf{Refresh or reject.} Diagnose failures, add the right observed evidence, and repeat from a retained baseline rather than adopting the candidate solely because its imagined reward rose.
+\end{enumerate}
+
+Refreshing modules creates different kinds of staleness. A new evaluator can rescore stored videos but cannot change their physical truth. A new world model changes the imagined environment, so old generated futures do not become samples from it. A new behavior policy changes the action distribution and may require fresh rollouts for the selected update. Versioning is useful because it lets us identify which of these changes occurred.
+
+Before an implementation is available, this loop can be studied with recorded examples and numerical traces. For an existing system, the first questions are concrete: What observations and commands are logged? Which controller and cameras define the interface? What is the current baseline? How is contact success measured? Which failures are available? Which modules are already trained, and what independent evaluation can be run? The answers determine whether the first useful contribution is data repair, model prediction, scorer calibration, or policy optimization.
+
+The loop now connects controllable prediction to a testable improvement claim. A compact world model is useful when it preserves consequences that change decisions; imagined experience is useful when a defined update turns it into better behavior supported by external evidence. Chapter~\ref{ch:directions} uses these questions to choose a first experiment and a longer research direction.
+\FloatBarrier
+
+\section{Exercises}
+\exercise{audit}{A checker accepts 20 clips; 4 are false successes. There were 50 actual failures in the full audit. Compute false discovery proportion and false-positive rate. Which denominator belongs to each?}
+\exercise{regret}{Three candidates have reference values 0.2, 0.8, 0.5 and model scores 0.9, 0.7, 0.4. Which is selected, and what is its selection regret? Could a single recorded action establish this regret?}
+\FloatBarrier

@@ -1,0 +1,97 @@
+% !TEX root = ../main.tex
+\chapter{From Images to Predictions}
+\label{ch:foundations}
+
+Imagine a cup beside a coaster. You can render a convincing picture of the scene from a new viewpoint. Can you now predict whether a robot will move the cup onto the coaster? The picture alone does not answer that question. The fingers may miss, the cup may slip, or the command may mean something different from what the model expects. To reason about these possibilities, we must connect appearance to action and action to consequence.
+
+This chapter builds that connection. The key distinction is simple: a representation describes something; a transition model describes how it changes. A decision then requires a third ingredient: a criterion for choosing among possible changes.
+
+\section{What graphics gives us}
+Rendering starts with a description of a scene and computes an image from a chosen camera. The description may include geometry, materials, lighting, and camera parameters. Physically based rendering models the interaction of light with the scene to explain image formation~\citep{pbrt}. It can give us controlled changes in viewpoint or illumination. It does not, merely by forming an image, determine how an object moves when touched.
+
+Reconstruction runs part of this reasoning in the other direction: observations constrain a scene representation. NeRF represents a scene using a function of spatial position and viewing direction; density and view-dependent radiance are integrated along camera rays to synthesize images~\citep{nerf}. 3D Gaussian Splatting uses optimized three-dimensional Gaussian primitives and a visibility-aware rendering procedure~\citep{gaussians}. Both are useful references for novel-view synthesis. Their basic static-scene formulations do not by themselves supply an action-conditioned contact model.
+
+The practical lesson is not that appearance is unimportant. Accurate geometry and rendering can expose alignment, generate observations, and support learning. The lesson is to ask which question a representation was trained to answer. A new-view image asks, ``What would this scene look like from there?'' A manipulation prediction asks, ``What would this action do here?'' Changing the camera and moving the cup are different interventions.
+
+\begin{figure}[htbp]\centering
+\begin{tikzpicture}[>=Stealth,every node/.style={font=\small},b/.style={draw=accent,fill=accent!5,rounded corners,align=center,text width=48mm,minimum height=16mm}]
+\node[b] (scene) at (0,0) {Scene description};
+\node[b] (image) at (8.2,0) {Image from another viewpoint};
+\node[b] (state) at (0,-2) {Situation before a push};
+\node[b] (next) at (8.2,-2) {Situation after the push};
+\draw[->,thick] (scene)--node[above]{camera + rendering}(image);
+\draw[->,thick] (state)--node[above]{action + dynamics}(next);
+\draw[->,dashed] (next.south)--++(0,-.6) node[below,align=center]{Rendering can show this result.\\Dynamics must first determine it.};
+\end{tikzpicture}
+\caption{Two changes that a plausible picture can hide. Novel-view synthesis changes the viewing condition. Dynamics predicts a change in the physical situation. The two functions can be combined, but one does not establish the other.}
+\label{fig:graphics-transition}
+\end{figure}
+
+\section{State, observation, and action}
+Let $t$ be an integer control-step index. Let $s_t$ denote the full physical state at that step: positions, velocities, and any other variables needed by our model of the system. Let $o_t$ denote the observation available to the robot, such as an image and joint measurements. Let $a_t$ denote one action, a command interpreted by a specified controller. These quantities have different roles even when a simple experiment stores each as a single number.
+
+For a sliding object, position alone may not be a sufficient state: the same position with different velocity can lead to different futures. For a gripped cup, a photograph may not reveal friction. We choose a state description to make the next-state distribution depend on the current state and action rather than the entire past. This is the Markov modeling assumption. An observation need not satisfy it~\citep{suttonbarto}.
+
+Let $\mathcal O$ be an observation map, $F_{\Delta t}$ a transition over a physical interval $\Delta t$, and $\kappa$ the relevant environment and controller settings. In an ideal deterministic example,
+\begin{equation}
+ o_t=\mathcal O(s_t),\qquad s_{t+1}=F_{\Delta t}(s_t,a_t;\kappa).
+ \label{eq:foundation-transition}
+\end{equation}
+The settings might include a surface property or controller gain. Real observations and transitions are uncertain; later chapters extend this abstraction. For now, it tells us where each question belongs. A camera model specifies $\mathcal O$. A dynamics model approximates $F_{\Delta t}$. A policy chooses $a_t$.
+
+\worked{A photograph cannot reveal everything}
+Two cups occupy the same visible pose. One is lightly held, the other firmly held. A lift command may succeed in only one case. An image predictor trained on both cases cannot reliably select the right outcome unless its inputs contain distinguishing evidence. It may need tactile measurements, recent motion, or a distribution over possible futures. A larger network does not supply an unmeasured fact.
+
+We write the available observation--action history as $h_t=(o_0,a_0,o_1,\ldots,a_{t-1},o_t)$. A short sequence can reveal motion that a single image hides. The task specification is $g$, for example ``place the cup on the coaster.'' Optional demonstration context is $C$. This context describes the intended behavior; it need not contain every physical condition that determines success.
+
+\checkpoint{Name the missing fact}{A generated video shows a cup rising with the gripper. Identify one visible fact and one hidden fact needed to decide whether that outcome is physically supported by the action.}
+
+\section{A short probability bridge}
+A model often cannot predict a unique next observation. Probability lets it represent alternatives instead of pretending they are known. Use $\Pr$ for the probability of an event and a vertical bar for conditioning. For example, $\Pr(\text{slip}\mid h_t,a_t)$ is the probability of a slip given the available history and proposed action. Conditioning restricts the information being used; it does not guarantee that the estimate is correct.
+
+Suppose an illustrative model assigns probability $0.7$ to a secure lift and $0.3$ to a slip. If a secure lift receives reward 1 and a slip reward 0, the model's expected reward is $0.7\times1+0.3\times0=0.7$. Expectation, written $\E$, is an average weighted by probabilities. It is not a promise that any one trial achieves the average. Later we average accumulated rewards over entire futures.
+
+A continuous action distribution uses a \emph{density}. The probability of one exact real-valued command is generally zero; intervals have probability obtained by integrating the density. A density value can exceed one without violating probability rules. For example, a uniform distribution over an interval of width $0.1$ has density 10 on that interval, yet total probability one. This distinction matters when later chapters compare action densities.
+
+Let $\pi_\theta$ be a policy distribution with parameters $\theta$, and $p_\phi$ a world-model distribution with parameters $\phi$. The notation
+\begin{equation}
+ a_t\sim\pi_\theta(\cdot\mid h_t,g,C),\qquad
+ \widehat o_{t+1}\sim p_\phi(\cdot\mid h_t,a_t)
+ \label{eq:foundation-distributions}
+\end{equation}
+means that we sample an action, then sample a predicted next observation. The dot stands for the variable being sampled; a hat marks a prediction or estimate. The first distribution answers what to do. The second answers what might follow. Its accuracy must be checked against a measured $o_{t+1}$.
+
+One subtlety matters. A conditional model learned from recordings can fit correlations that fail when a different policy chooses actions. Perhaps the demonstrations contain large pushes only when the object is far from an obstacle. The model may have little evidence about a large push near the obstacle. Writing an action after the conditioning bar does not establish reliable prediction for every intervention. We must test action coverage and the availability of relevant state information.
+
+\section{What changes during learning?}
+A model contains adjustable numbers called parameters. Training chooses them to reduce a loss on examples. Let $\mathcal D$ be a dataset, $i$ index one example, and $N$ be the number of examples in a batch. A loss $\mathcal L(\theta)$ measures how well a policy with parameters $\theta$ fits the selected training objective. Let $\nabla_\theta\mathcal L$ be its gradient, the vector of local derivatives with respect to those parameters. A gradient-descent step with positive learning rate $\eta_{\mathrm{learn}}$ is
+\begin{equation}
+ \theta_{\mathrm{new}}=\theta-\eta_{\mathrm{learn}}\nabla_\theta\mathcal L(\theta).
+ \label{eq:foundation-descent}
+\end{equation}
+The minus sign moves against the direction of increasing loss. A finite step can still fail to reduce the loss if it is too large. Even a lower training loss need not mean better behavior outside the training distribution.
+
+\worked{One parameter, one update}
+For this example only, let a scalar policy parameter $\theta$ be a constant normalized action and let the demonstrated target be 0.8. Choose $\mathcal L(\theta)=(\theta-0.8)^2$. At $\theta=0.2$, the derivative is $2(0.2-0.8)=-1.2$. With $\eta_{\mathrm{learn}}=0.1$, the updated value is $0.32$. The squared error drops from $0.36$ to $0.2304$. This demonstrates fitting a target, not proving that the target is safe or successful.
+
+\emph{Inference} evaluates the model with fixed parameters. The output can change because the image, task, or demonstration changed. \emph{Training} changes the parameters. A robot correcting its grip after receiving a new image may be using ordinary feedback with no weight update. Chapter~\ref{ch:policy} will add another distinction: the internal numerical steps that generate an action are also not parameter updates.
+
+Separate training, development, and test data by independent episodes or conditions appropriate to the claim. Adjacent frames from the same attempt are strongly related. Putting almost identical frames on both sides of a split can make generalization appear easier than it is. Use development data to make design choices and reserve the test set for evaluation. If repeated test inspection drives model changes, that test set has become part of development.
+
+\section{Feedback turns prediction into a decision problem}
+Suppose a robot chooses a long sequence of commands from one initial photograph and never observes again. A small initial error can persist through the sequence. In feedback control, it observes after acting and chooses again from the updated evidence. A learned policy is one way to implement this mapping; feedback itself does not require a neural network.
+
+A world model adds another option: compare a few candidate actions before execution. The robot might imagine pushing, retracting, and moving sideways, score their consequences, and execute one. This is model-based planning. Alternatively, it might train a policy using many imagined attempts so that later choices require less search. This is learning from imagined experience. They have different computational costs and different failure modes.
+
+A predictor can be useful even when imperfect if it preserves the distinction relevant to the choice. It can be useless despite attractive images if it predicts success for every action. We therefore need three increasingly demanding questions:
+\begin{enumerate}[leftmargin=*]
+\item Does it predict a recorded action's consequence on held-out data?
+\item Does it help select a better action among alternatives with independent outcome evidence?
+\item Does the resulting policy improve behavior when it acts, observes, and acts again?
+\end{enumerate}
+The rest of the book follows this sequence. First we need a policy expressive enough to produce useful movements. Then we need feedback that distinguishes better from worse experience. Finally we need an experiment that could show our proposed improvement is wrong.
+
+\section{Exercises}
+\exercise{state}{Two images show a cup at the same position, but one cup is moving. Why can position alone fail to be a Markov state? Name an additional measurement that could help.}
+\exercise{descent}{Repeat the scalar update above with learning rate 0.5. What is the new parameter? Why does this one-example result not prove generalization?}
+\FloatBarrier

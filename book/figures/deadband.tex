@@ -1,0 +1,10 @@
+\begin{tikzpicture}[>=Stealth,x=52cm,y=38cm,every node/.style={font=\small}]
+\draw[->] (-.115,0)--(.12,0) node[below]{command};
+\draw[->] (0,-.09)--(0,.10) node[above]{displacement};
+\draw[accent,very thick] (-.1,-.08)--(-.02,0)--(.02,0)--(.1,.08);
+\draw[orange!85!black,thick,dashed] (-.1,-.06)--(-.04,0)--(.04,0)--(.1,.06);
+\node[anchor=west,accent] at (.045,-.055) {$\kappa=0.02$ m};
+\node[anchor=west,orange!85!black] at (.045,-.075) {$\kappa=0.04$ m};
+\foreach \x in {-.1,-.05,.05,.1}{\draw (\x,.002)--(\x,-.002) node[below]{\scriptsize\x};}
+\node[anchor=east] at (-.004,.08) {0.08 m};
+\end{tikzpicture}
