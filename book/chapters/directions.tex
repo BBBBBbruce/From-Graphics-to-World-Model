@@ -35,12 +35,6 @@ The program writes the seed, data counts, settings, fitted parameters, predictio
 \begin{quote}\ttfamily\small
 python3 examples/one\_dimensional\_world.py --output results/toy
 \end{quote}
-Then run the checks:
-\begin{quote}\ttfamily\small
-python3 -m unittest discover -s tests -v
-\end{quote}
-The exact default results are saved in \texttt{docs/toy-results.json}. They are outputs of this toy program. The tests check response-law boundaries, parameter recovery in a noiseless example, reproducibility, and regret semantics; they do not validate a robot controller.
-
 \subsection{Read the failure before changing the model}
 First compare persistence with the fitted predictors. Next compare the original and shifted conditions for each predictor. A fitted width close to 0.02 is expected to describe the original condition better than 0.04. A loss of decision quality under the shift is evidence that the assumed response law or condition has become inaccurate. It does not, by itself, motivate a larger policy optimizer.
 
@@ -49,7 +43,7 @@ Now consider what would let the model adapt. If the current width is measured, i
 The current example consists of independent one-step cases. Studying identification from history requires a new multi-step dataset with condition-consistent episodes and a split that keeps episodes separate. Merely passing random old examples into a history encoder would not establish that they describe the present slider.
 
 \section{Match a direction to a question}
-Choose the question first, then the smallest experiment that could answer it. The following directions extend the book's running problems. They are proposals, not claims of novel contributions or guaranteed publication opportunities.
+Choose the question first, then the smallest experiment that could answer it. The following directions extend the book's running problems.
 
 \begin{table}[htbp]\centering\small
 \caption{Research entry points with a measurable first result.}
@@ -106,12 +100,7 @@ On days seven through nine, use Chapter~\ref{ch:engineering} to write an action 
 
 On days ten through twelve, use Chapter~\ref{ch:evaluation} to specify the claim, independent unit, split, metric, and failure criterion before running the final test. Inspect individual failures as well as averages.
 
-Use the final two days to report the question, assumptions, method, results with counts and units, a limitation, and the next experiment. Read one relevant primary paper and map its inputs, objective, and evidence onto the same template. Completing this learning path does not establish research novelty.
-
-\section{What a defensible first result looks like}
-A useful statement is narrow: ``On 200 held-out one-step cases with the specified command grid and shifted deadband, this fitted predictor changed decision regret by this amount relative to this baseline.'' It names a population and a comparison. A stronger claim about general robot manipulation would require different evidence.
-
-Before scaling up, reproduce the result and explain one success and one failure. Identify the missing observation or assumption responsible. That gives you a reason to pursue the next experiment.
+Use the final two days to report the question, assumptions, method, results with counts and units, a limitation, and the next experiment. Read one relevant primary paper and map its inputs, objective, and evidence onto the same template.
 
 \section{Exercises}
 \exercise{deadband}{Starting at 0.5 metres with $\kappa=0.02$ metres, compute the next position for actions 0.01, 0.05, and $-0.05$ metres. Which of these reveals that the response is not a simple unit-gain displacement?}

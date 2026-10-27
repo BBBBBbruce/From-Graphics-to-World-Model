@@ -4,7 +4,7 @@
 
 Return to the connector paused at the socket rim. Our model can now generate consequences for a specified action. We might try a small push, a slight rotation, or a withdrawal followed by realignment. Generating these alternatives is only the beginning. The learning system still needs a definition of progress, a way to estimate consequences beyond the short rollout, and an update rule that improves the policy without turning a model's mistake into a habit.
 
-This chapter follows that chain. We first separate the learning stages, then build an imagined trajectory and its targets, compare update mechanisms, and examine unreliable feedback. Finally we ask what outside evidence could reject the claim that the policy improved. The equations form a teaching example unless explicitly attributed to a paper.
+This chapter follows that chain. We first separate the learning stages, then build an imagined trajectory and its targets, compare update mechanisms, and examine unreliable feedback. Finally we ask what outside evidence could reject the claim that the policy improved.
 
 \section{A predictor becomes an environment through a loop}
 In recorded-action prediction, the action sequence is already known. In policy-in-the-loop imagination, the next action depends on what the model just generated. If the model invents that the connector has seated, the policy may release it. The resulting imagined trajectory is internally consistent with the invented event, even though the real system would have dropped an unseated part.
@@ -24,8 +24,8 @@ The desired return is defined in the real environment. The imagined return is de
 \section{Learn the world, learn the task, then improve behavior}
 Each training stage adds a different kind of evidence. Unlabeled video can supervise temporal prediction. Action-aligned video adds control semantics. Task rewards say which outcomes matter. None of these alone supplies a policy that is better than the behavior in the dataset.
 
-\conceptfigure{middle-dreamer}{Three training questions}{Dynamics, task feedback, and policy improvement have distinct targets, even when they share a network. Conceptual connection: \citep{dreamer4}.}{fig:middle-dreamer}
-\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2509.24527v1}{Figure~2 in the original paper}~\citep{dreamer4} alongside this conceptual diagram.
+\conceptfigure{middle-dreamer}{Three training questions}{Dynamics, task feedback, and policy improvement have distinct targets, even when they share a network~\citep{dreamer4}.}{fig:middle-dreamer}
+\noindent See \citet{dreamer4}, \href{https://arxiv.org/pdf/2509.24527v1}{Figure~2}.
 
 
 Dreamer 4 gives a concrete staged example: pretrain tokenizer and dynamics; fine-tune with task inputs, policy and reward heads while retaining prediction training; then update policy and value heads on imagined experience with the transformer frozen. Agent tokens attend to other modalities, but the reverse attention is blocked, preventing direct task-token influence on dynamics. Its main policy update uses a variant of preference-based maximum a posteriori policy optimization (PMPO), using advantage signs with a behavioral prior~\citep{pmpo}. Shortcut training is a different objective. The principal evidence is Minecraft, not physical manipulation~\citep[Alg.~1 and Sec.~3.3]{dreamer4}.
@@ -78,7 +78,7 @@ For a likelihood-based or flow-loss-surrogate policy update, store the rollout, 
 \draw[->] (policy)--(loss);
 \draw[->,very thick,accent] ([yshift=-2mm]loss.west)--node[below]{gradient}([yshift=-2mm]policy.east);
 \end{tikzpicture}
-\caption{Original diagram for a policy update from stored experience. The upper arrows supply fixed data; the emphasized arrow is the policy gradient. Separate critic fitting uses Equation~\eqref{eq:middle-critic}. This is not differentiable planning through dynamics.}
+\caption{A policy update from stored experience. The upper arrows supply fixed data; the emphasized arrow is the policy gradient. Separate critic fitting uses Equation~\eqref{eq:middle-critic}. This is not differentiable planning through dynamics.}
 \label{fig:middle-gradients}
 \end{figure}
 
@@ -115,9 +115,9 @@ Suppose an imagined push makes the connector pass through the socket wall. The r
 
 These cases separate three questions: whether the future is well predicted, whether the action is desirable, and whether the predicted outcome can be verified. A reliability estimate addresses the first or third according to its supervision. It is not automatically a negative action advantage.
 
-\conceptfigure{middle-hawmpo}{A score for success needs a score for reliability}{The reliability assessor is another fallible learned component. Its supervision and errors need their own evaluation. Conceptual connection: \citep{hawmpo}.}{fig:middle-hawmpo}
+\conceptfigure{middle-hawmpo}{A score for success needs a score for reliability}{The reliability assessor is another fallible learned component. Its supervision and errors need their own evaluation~\citep{hawmpo}.}{fig:middle-hawmpo}
 
-\paperfigure{hawmpo-overview.pdf}{Task reward meets a reliability estimate. Figure~1 from \citet{hawmpo}, arXiv:2609.09941v1. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}. Extracted from the paper page; original figure content and notation retained.}{paper:hawmpo-overview}{Follow task reward and hallucination assessment into the policy-learning feedback. In this source diagram, $H$ denotes the role of our $u_{\mathrm{hall}}$, $R$ our $\widehat r$, and adjusted $\widehat R$ our $\widetilde r$. Its $\widehat A$ is an estimated advantage, written $\widehat{\mathcal A}$ here; its world-model $M_\theta$ plays the role of our $p_\phi$.}
+\paperfigure{hawmpo-overview.pdf}{Task reward meets a reliability estimate. Figure~1 from \citet{hawmpo}. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}.}{paper:hawmpo-overview}{Follow task reward and hallucination assessment into the policy-learning feedback. In this source diagram, $H$ denotes the role of our $u_{\mathrm{hall}}$, $R$ our $\widehat r$, and adjusted $\widehat R$ our $\widetilde r$. Its $\widehat A$ is an estimated advantage, written $\widehat{\mathcal A}$ here; its world-model $M_\theta$ plays the role of our $p_\phi$.}
 
 
 HaWMPO learns a hallucination assessor from generated-versus-observed futures using feature, depth, motion, and image-quality proxies. At rollout time it uses generated frames, actions, and context without the observed future. Its assessor audit uses 50 LIBERO chunks; physical evaluation covers two tasks with 20 trials per method per task~\citep[Secs.~3 and 4.3--4.6]{hawmpo}. These proxy labels and small samples limit the evidence for reliability.
@@ -144,8 +144,8 @@ For insertion, uncertainty about a hidden latch suggests requesting an observati
 \section{Prediction, decision quality, and improvement need different tests}
 The most useful external test begins with a question the model could get wrong. Fix a recorded initial history and its applied actions, generate the future, and compare with independently observed consequences. This removes the policy's freedom to change the test while we measure prediction.
 
-\conceptfigure{middle-oracle}{Hold the action fixed}{This comparison tests consequences. It does not let a new policy choose different actions or establish policy improvement. Conceptual connection: \citep{worldoracle}.}{fig:middle-oracle}
-\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2610.18826v4}{Figure~1 in the original paper}~\citep{worldoracle} alongside this conceptual diagram.
+\conceptfigure{middle-oracle}{Hold the action fixed}{This comparison tests consequences. It does not let a new policy choose different actions or establish policy improvement~\citep{worldoracle}.}{fig:middle-oracle}
+\noindent See \citet{worldoracle}, \href{https://arxiv.org/pdf/2610.18826v4}{Figure~1}.
 
 
 WorldOracle evaluates recorded-action futures against real executions along outcome correctness, spatial alignment, interaction-region fidelity, and multiview action coherence. Its outcome score uses a VLM; the multiview metric aggregates reference-grounded arm alignment rather than directly proving 3D consistency. Limited task/embodiment coverage, single-reference ambiguity, and unequal adaptation conditions constrain comparisons~\citep[Sec.~3 and App.~F]{worldoracle}. Its paired evidence can expose false predicted success, but does not by itself establish closed-loop policy improvement.
@@ -178,14 +178,14 @@ Improves behavior & Matched closed-loop baseline/candidate trials & Generalizati
 \end{table}
 
 \subsection{Use denominators that preserve the failure}
-Suppose a checker accepts 20 generated clips and independent review finds four false successes. In this illustrative audit, false discoveries among accepted clips are $4/20=20\%$. That is not the false-positive rate among all actual failures; the latter needs the number of actual failures considered by the checker. Also report rejected true successes, or a checker can appear conservative merely by accepting almost nothing.
+Suppose a checker accepts 20 generated clips and independent review finds four false successes. Here, false discoveries among accepted clips are $4/20=20\%$. That is not the false-positive rate among all actual failures; the latter needs the number of actual failures considered by the checker. Also report rejected true successes, or a checker can appear conservative merely by accepting almost nothing.
 
 For policy comparison, suppose a baseline succeeds on 12 of 20 trials and a candidate on 15 of 20. The observed difference is 15 percentage points, with just three additional successes. It is an estimate under the trial protocol, not a precise universal gain. Report uncertainty at the independent trial or configuration level rather than pretending that thousands of video frames are independent successes. If the same configurations are paired across methods, preserve that pairing in the analysis.
 
 Ablations should isolate the claim: same real-data budget with and without imagined data; same initialization and imagined batch with filtering versus the proposed optimizer; fixed versus refreshed world model under a specified refresh-data budget. Changing data quantity, scorer, and optimizer together may yield a useful system comparison, but cannot identify which component caused the difference.
 
 \section{One proposed iteration, from evidence back to evidence}
-We can now state a coherent research loop from separately testable components. Begin with a baseline and a precise task event. Use recorded attempts to test action alignment, representation loss, prediction errors, and the evaluator. Freeze versions for one bounded imagined-data cycle. Generate short branches from independent real contexts, retain lineage and uncertainty, and train a candidate with an explicitly chosen objective. Then test the candidate against evidence outside the generator and scorer that supplied its feedback.
+One iteration starts from recorded attempts, generates short imagined branches, and trains a candidate policy. Independent evaluation determines whether to keep the update:
 
 \begin{enumerate}[leftmargin=*,itemsep=3pt]
 \item \textbf{Specify.} Record the action/controller contract, observable success event, data splits, baseline and comparison budget.
@@ -198,9 +198,9 @@ We can now state a coherent research loop from separately testable components. B
 
 Refreshing modules creates different kinds of staleness. A new evaluator can rescore stored videos but cannot change their physical truth. A new world model changes the imagined environment, so old generated futures do not become samples from it. A new behavior policy changes the action distribution and may require fresh rollouts for the selected update. Versioning is useful because it lets us identify which of these changes occurred.
 
-Before an implementation is available, this loop can be studied with recorded examples and numerical traces. For an existing system, the first questions are concrete: What observations and commands are logged? Which controller and cameras define the interface? What is the current baseline? How is contact success measured? Which failures are available? Which modules are already trained, and what independent evaluation can be run? The answers determine whether the first useful contribution is data repair, model prediction, scorer calibration, or policy optimization.
+Start with the available observations, commands, failure recordings, and success measurements. Missing or unreliable evidence may make data repair or scorer calibration more useful than a new policy optimizer.
 
-The loop now connects controllable prediction to a testable improvement claim. A compact world model is useful when it preserves consequences that change decisions; imagined experience is useful when a defined update turns it into better behavior supported by external evidence. Chapter~\ref{ch:directions} uses these questions to choose a first experiment and a longer research direction.
+Chapter~\ref{ch:directions} turns these choices into experiments and research directions.
 \FloatBarrier
 
 \section{Exercises}

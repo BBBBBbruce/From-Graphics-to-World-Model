@@ -12,7 +12,7 @@ for index, page in enumerate(reader.pages):
     text = page.extract_text() or ""
     if "Symbols and Conventions" in text and "Interaction, context, and time" in text:
         start = index
-    if start is not None and index > start and "Chapter 1" in text and "From Images to Predictions" in text:
+    if start is not None and index > start and text.lstrip().startswith("Bibliography"):
         stop = index
         break
 assert start is not None and stop is not None, "Could not locate symbol chapter boundaries"

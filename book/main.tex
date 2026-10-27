@@ -46,7 +46,7 @@
 \hypersetup{pageanchor=false}
 \begin{titlepage}
 \vspace*{12mm}
-{\small\sffamily\color{accent}PUBLIC RESEARCH EDITION 1.1\quad / \quad OCTOBER 2026\par}
+{\small\sffamily\color{accent}OCTOBER 2026\par}
 \vspace{15mm}
 {\Huge\bfseries\color{ink}From Graphics\par to World Models\par}
 \vspace{9mm}
@@ -55,39 +55,27 @@
 \input{figures/cover}
 \vfill
 \begin{minipage}{0.94\linewidth}
-A photograph shows what a scene looks like. A world model asks what will happen if we act. This book follows that change of question, from rendering and demonstrations to controllable prediction and evidence of better behavior.
+A photograph shows what a scene looks like. A robot needs to know what will happen when it acts. From grasping a cup to inserting a connector, this book explores how world models can guide decisions and learning.
 
-For students and professionals with backgrounds in computer graphics, physics, mathematics, or related fields who want to move into robotics, especially world models for robot learning. Assumes at least third-year undergraduate foundations and helps readers choose further learning and research directions.
+For students and professionals coming to robotics from computer graphics, physics, mathematics, and related fields.
 \end{minipage}
 \end{titlepage}
 \pagenumbering{roman}\hypersetup{pageanchor=true}
-\chapter*{How to Read This Book}
-\addcontentsline{toc}{chapter}{How to Read This Book}\markboth{How to Read This Book}{}
-\noindent\textbf{Who this book is for.} This book is for students and professionals with a background in computer graphics, physics, mathematics, or a related quantitative field who want to move into robotics. It focuses on world models for robot learning and helps readers connect what they already know to the field, understand current research, and choose further learning or research directions.
+\chapter*{Introduction}
+\addcontentsline{toc}{chapter}{Introduction}\markboth{Introduction}{}
+This book is for students and professionals with a background in computer graphics, physics, mathematics, or a related quantitative field who want to move into robotics, particularly world models for robot learning. It connects familiar ideas to current research and helps you choose what to study or investigate next.
 
-\noindent\textbf{Prerequisites.} Assume knowledge comparable to at least third-year undergraduate study: linear algebra, multivariable calculus, probability, basic machine learning, and Python. Equivalent preparation through professional work or self-study is equally suitable; prior robotics experience is not required. The book develops research-level mechanisms, objectives, and comparisons. Read Chapter~\ref{ch:foundations} selectively if its mathematical refresher is already familiar.
+Graphics gives us ways to represent scenes and form images. Physics describes how systems change under forces and constraints. Mathematics provides tools for reasoning about uncertainty, learning, and optimization. Robotics brings these ideas together around a decision: what should an agent do, given what it can observe and what it wants to achieve?
 
-\begin{enumerate}[leftmargin=*,itemsep=4pt]
-\item \textbf{From images to predictions.} Begin with rendering, then distinguish physical state, observation, action, and uncertainty.
-\item \textbf{Policies and demonstrations.} Learn how a distribution generates continuous actions and how demonstration context changes behavior.
-\item \textbf{World models and improvement.} Connect predicted experience to rewards, values, and policy updates. Sections~\ref{sec:policy-gradient}--\ref{sec:fpo} and Appendix~\ref{app:bounds} develop the policy-gradient and likelihood-bound details.
-\item \textbf{Controllable prediction.} Specify commands, align data, and preserve the information needed near contact.
-\item \textbf{Evidence of improvement.} Separate prediction tests, decision tests, and closed-loop evaluation.
-\item \textbf{A first research direction.} Use the small experiment as a controlled warm-up, then choose a paper-level reproduction or research question with a clear comparison.
-\end{enumerate}
+Consider a robot moving a cup onto a coaster. A good image of the cup does not tell us whether a grasp will hold. A plausible video of a successful lift does not tell us whether the proposed commands would produce it. To choose useful actions, the robot needs a model that responds to those actions and preserves the consequences that matter. To learn from that model, it also needs a way to recognize when its predictions are wrong.
 
-Cup moving and connector insertion are teaching examples; numbers labeled illustrative are chosen for explanation. The executable laptop experiment is a toy system, whose results do not establish robot performance.
+We begin with scene representations and the distinction between observing a state and predicting a transition. We then study policies that generate movements, demonstrations that specify tasks, and rewards that guide learning. The later chapters examine controllable prediction, contact, and the experiments needed to judge whether a model improves decisions. The final chapter develops possible learning and research directions, from a small dynamics experiment to comparisons of published methods.
 
-Follow the argument with our flowcharts and inspect architectures and results in the attributed paper figures. Try exercises before Appendix~\ref{app:solutions}. Our equations use one notation system; paper figures retain source labels, explained nearby. A hat marks a prediction or estimate in our notation.
+You should be comfortable with linear algebra, multivariable calculus, probability, basic machine learning, and Python at roughly third-year undergraduate level or above. Equivalent preparation through professional work or self-study is welcome. No previous robotics experience is required. If the mathematical refresher in Chapter~\ref{ch:foundations} is familiar, focus on how the prediction problem changes when actions enter the picture.
 
-Author--year citations link to primary sources. Publication years identify conference or journal editions; preprint years and versions identify inspected revisions. Published mechanisms, teaching constructions, and proposals remain distinct. Proposed systems need experiments before they can support performance claims.
-
-This educational synthesis has not undergone independent peer review. Corrections are welcome. Source and figure registers document verification, reuse licenses, and linked research visuals.
-
-\textbf{Reuse.} Copyright 2026, From Graphics to World Models contributors. Original prose and teaching diagrams: CC BY-NC 4.0. Reproduced paper figures: their original CC BY 4.0 terms, without the book's noncommercial restriction. Code, tests, and scripts: MIT. See \texttt{NOTICE.md}, \texttt{FIGURES.md}, and the repository licenses.
+Follow the cup and connector examples through the chapters, work through the derivations, and use the exercises to test your understanding. For a hands-on starting point, Chapter~\ref{ch:directions} includes a small experiment that runs on a laptop. Its simple response law makes it possible to examine why a model chooses the wrong action before tackling the same question in a visual world model.
 
 \tableofcontents
-\input{notation}
 \clearpage\pagenumbering{arabic}
 \input{chapters/foundations}
 \input{chapters/policies}
@@ -99,7 +87,12 @@ This educational synthesis has not undergone independent peer review. Correction
 \renewcommand{\chaptermark}[1]{\markboth{Appendix \thechapter}{}}
 \input{chapters/appendix-bounds}
 \input{chapters/solutions}
+\input{notation}
 \clearpage\phantomsection\addcontentsline{toc}{chapter}{Bibliography}
 \bibliographystyle{plainnat}
 \begingroup\small\setlength{\bibsep}{5pt}\raggedright\bibliography{references}\endgroup
+\par\bigskip
+\noindent\begin{minipage}{\linewidth}\footnotesize
+Copyright 2026, From Graphics to World Models contributors. Original text and diagrams: CC BY-NC 4.0. Code: MIT. Reproduced paper figures remain CC BY 4.0; their figure regions were extracted without changing the content or notation. Full source and license details are available in the \href{https://github.com/BBBBBbruce/From-Graphics-to-World-Model/blob/main/FIGURES.md}{figure credits}.
+\end{minipage}
 \end{document}

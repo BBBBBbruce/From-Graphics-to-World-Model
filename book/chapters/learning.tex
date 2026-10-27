@@ -3,8 +3,8 @@
 The policy in Chapter~\ref{ch:policy} can generate actions and read demonstrations. Now it needs to compare consequences. We first construct imagined experience, then define reward and advantage, and finally derive an update. The gradient and FPO sections develop the update at equation level. They belong to the technical argument: the later reliability discussion depends on understanding what the objective can and cannot establish.
 
 \section{Imagining consequences with an action-conditioned world model}
-\conceptfigure{ctrl-teaser}{A generated future becomes an input}{Following the return arrow makes this a policy-in-the-loop experiment. Prediction errors can affect later decisions. Conceptual connection: \citep{ctrl}.}{fig:ctrl-teaser}
-\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2510.10125v3}{Figure~1 in the original paper}~\citep{ctrl} alongside this conceptual diagram.
+\conceptfigure{ctrl-teaser}{A generated future becomes an input}{Following the return arrow makes this a policy-in-the-loop experiment. Prediction errors can affect later decisions~\citep{ctrl}.}{fig:ctrl-teaser}
+\noindent See \citet{ctrl}, \href{https://arxiv.org/pdf/2510.10125v3}{Figure~1}.
 
 
 \subsection{The interface is part of the model}
@@ -21,8 +21,8 @@ A usable interface needs a shared action convention, camera layout, time spacing
 
 Ctrl-World adapts a pretrained video diffusion model using joint multiview prediction, frame-level pose conditioning, and sparse pose-conditioned memory. Its described adapter converts joint-velocity commands to joint configurations and then uses forward kinematics to obtain Cartesian poses~\citep{ctrl}. These conversion steps are essential context for interpreting ``action controllability.''
 
-\conceptfigure{ctrl}{An occluded cup still has a history}{A remembered view can preserve earlier geometry. It is not a new measurement of current contact. Conceptual connection: \citep{ctrl}.}{fig:ctrl}
-\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2510.10125v3}{Figure~2 in the original paper}~\citep{ctrl} alongside this conceptual diagram.
+\conceptfigure{ctrl}{An occluded cup still has a history}{A remembered view can preserve earlier geometry. It is not a new measurement of current contact~\citep{ctrl}.}{fig:ctrl}
+\noindent See \citet{ctrl}, \href{https://arxiv.org/pdf/2510.10125v3}{Figure~2}.
 
 
 \subsection{Why multiple views and memory matter}
@@ -32,9 +32,9 @@ History and memory address a related temporal ambiguity. Recent observations ind
 
 WEAVER predicts multiview image latents and proprioception from actions, recent history, and sparse older memory. It adds latent reward and critic heads so candidate outcomes can be scored without repeatedly decoding images for a large external judge. Its reward supervision comes from RoboMeter progress labels; the critic uses bootstrapped targets~\citep{weaver}. These heads make scoring cheaper, but do not create task truth from dynamics alone. In the inspected WEAVER version, actions are joint-position differences, with an additional velocity-to-position adapter for interfacing with other action conventions~\citep{weaver}. This differs from Ctrl-World's Cartesian-pose conditioning. An adapter must preserve timing and command meaning; matching vector dimensions is insufficient.
 
-\conceptfigure{weaver}{One representation, two uses}{Decoding and scoring serve different consumers. A low-cost score still depends on the quality of its supervision. Conceptual connection: \citep{weaver}.}{fig:weaver}
+\conceptfigure{weaver}{One representation, two uses}{Decoding and scoring serve different consumers. A low-cost score still depends on the quality of its supervision~\citep{weaver}.}{fig:weaver}
 
-\paperfigure{weaver-architecture.pdf}{Prediction and scoring inside WEAVER. Figure~2 from \citet{weaver}, arXiv:2606.13672v2. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}. Extracted from the paper page; original figure content and notation retained.}{paper:weaver-architecture}{Trace the action and history inputs into latent future prediction, then distinguish image decoding from latent reward and critic heads. A cheaper score still depends on its training labels and bootstrap targets.}
+\paperfigure{weaver-architecture.pdf}{Prediction and scoring inside WEAVER. Figure~2 from \citet{weaver}. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}.}{paper:weaver-architecture}{Trace the action and history inputs into latent future prediction, then distinguish image decoding from latent reward and critic heads. A cheaper score still depends on its training labels and bootstrap targets.}
 
 
 \subsection{Two uses of prediction: choosing now and learning for later}
@@ -74,7 +74,7 @@ Let $r_t$ be the reward for the transition from step $t$ to step $t+1$, $\gamma\
 We use $r_t$ for the reward associated with the transition starting at $t$; other indexing conventions shift it by one. A return combines future rewards, whereas an immediate reward scores one transition. For a chunk-based decision, the reward over its executed prefix and the discount to the next decision must be aggregated consistently. One cannot use the discount per physical step as the discount per chunk without considering the chunk duration.
 
 \worked{Why an unrewarded approach can still be useful}
-Use an illustrative three-decision task: approach, grasp-and-lift, then place-and-release. Let the rewards on a successful trial be $(0,0,1)$. With $\gamma=0.9$, the returns seen from those decisions are $(0.81,0.9,1)$. The approach had no immediate reward but a positive future return. On a failed trial with rewards $(0,0,0)$, all three returns are zero. The numbers provide a way to credit earlier actions for later outcomes, although a single trajectory cannot prove which action was responsible. The temporal credit-assignment problem is precisely how to use such delayed evidence to improve decisions~\citep{rlintro}.
+Consider a three-decision task: approach, grasp-and-lift, then place-and-release. Let the rewards on a successful trial be $(0,0,1)$. With $\gamma=0.9$, the returns seen from those decisions are $(0.81,0.9,1)$. The approach had no immediate reward but a positive future return. On a failed trial with rewards $(0,0,0)$, all three returns are zero. The numbers provide a way to credit earlier actions for later outcomes, although a single trajectory cannot prove which action was responsible. The temporal credit-assignment problem is precisely how to use such delayed evidence to improve decisions~\citep{rlintro}.
 
 Define the value function $V^\pi$ as the expected return when policy $\pi$ continues from the current information:
 \begin{equation}
@@ -116,7 +116,7 @@ Task and context arguments are suppressed here, but are still present. An advant
 At one fixed cup observation, imagine only two abstract choices: approach from the left or the right. Suppose the current policy chooses each with probability $1/2$, and their true expected returns are $0.8$ and $0.4$. Then $V^\pi=0.5(0.8)+0.5(0.4)=0.6$, so their advantages are $+0.2$ and $-0.2$. The right approach can succeed sometimes and still have negative advantage because it is worse than the current average. If the policy shifts toward the left approach, both its expected return and the baseline for future comparisons change. In a real task we do not know these exact branch values; sampled outcomes and critics estimate them.
 
 \worked{Same success, different improvement signal}
-For an illustrative undiscounted success-only task, suppose the critic predicts $0.8$ before an easy centered grasp and $0.3$ before a difficult occluded grasp. Both trials succeed. Define the estimated advantage $\widehat{\mathcal A}$ as the observed return minus the critic prediction, $\widehat{\mathcal A}=G-V_\nu$. Their estimated advantages are $0.2$ and $0.7$. A failed difficult grasp would have advantage $-0.3$. This is an estimator from sampled outcomes, not proof that one individual action caused the entire outcome. Repeated data and an appropriate credit-assignment scheme are needed to distinguish good decisions from luck.
+For an undiscounted success-only task, suppose the critic predicts $0.8$ before an easy centered grasp and $0.3$ before a difficult occluded grasp. Both trials succeed. Define the estimated advantage $\widehat{\mathcal A}$ as the observed return minus the critic prediction, $\widehat{\mathcal A}=G-V_\nu$. Their estimated advantages are $0.2$ and $0.7$. A failed difficult grasp would have advantage $-0.3$. This is an estimator from sampled outcomes, not proof that one individual action caused the entire outcome. Repeated data and an appropriate credit-assignment scheme are needed to distinguish good decisions from luck.
 
 Let $d_t=1$ at a genuine terminal transition and $d_t=0$ otherwise. Using a fixed critic $V_{\bar\nu}$, define the TD residual $\delta_t$ by
 \begin{equation}
@@ -204,9 +204,9 @@ This is where the earlier flow-matching loss becomes useful again. We know how t
 
 \section{Flow Policy Optimization: using a loss difference as a surrogate}
 \label{sec:fpo}
-\conceptfigure{fpo-teaser}{Keep both ways around the obstacle}{Separated valid action modes need not have a valid average. A flexible distribution can retain both; rewards must then favor useful samples. Conceptual connection: \citep{fpo}.}{fig:fpo-teaser}
+\conceptfigure{fpo-teaser}{Keep both ways around the obstacle}{Separated valid action modes need not have a valid average. A flexible distribution can retain both; rewards must then favor useful samples~\citep{fpo}.}{fig:fpo-teaser}
 
-\paperfigure{fpo-multimodal.pdf}{Multiple useful action modes. Figure~1 from \citet{fpo}, arXiv:2507.21053v2. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}. Extracted from the paper page; original figure content and notation retained.}{paper:fpo-multimodal}{Find the starred state and compare the evolving sample distribution with the possible trajectories. This is the authors' GridWorld illustration, not a robot experiment. Its purpose here is to connect multimodal generation to policy optimization.}
+\paperfigure{fpo-multimodal.pdf}{Multiple useful action modes. Figure~1 from \citet{fpo}. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}.}{paper:fpo-multimodal}{Find the starred state and compare the evolving sample distribution with the possible trajectories. The authors' GridWorld example shows how optimization reshapes a multimodal action distribution.}
 
 
 \subsection{Score a collected action with the flow model}
@@ -233,7 +233,7 @@ Substitute $\tilde\rho$ into the clipped objective in Equation~\eqref{eq:ppo}. T
 When the clipped objective is not on a plateau, positive advantage means that maximizing the surrogate tends to reduce the current loss on that action. For negative advantage, the local direction is reversed. The clipping and interactions among samples qualify this intuition; the algorithm does not independently set the likelihood of every action.
 
 \worked{A paired loss calculation}
-Suppose a collected cup-lift chunk has estimated advantage $0.7$. On shared noise/time samples, let the frozen policy loss be $1.10$ and the current loss be $0.95$. The surrogate ratio is $e^{0.15}\approx1.162$. With clipping width $0.2$, this term remains below the positive-advantage plateau. If the current loss drops to $0.70$, the ratio becomes $e^{0.40}\approx1.492$ and the positive contribution is clipped at $1.2\times0.7=0.84$. These are illustrative loss values, not paper hyperparameters or an experiment. In particular, $1.162$ is not an estimated task-success probability.
+Suppose a collected cup-lift chunk has estimated advantage $0.7$. On shared noise/time samples, let the frozen policy loss be $1.10$ and the current loss be $0.95$. The surrogate ratio is $e^{0.15}\approx1.162$. With clipping width $0.2$, this term remains below the positive-advantage plateau. If the current loss drops to $0.70$, the ratio becomes $e^{0.40}\approx1.492$ and the positive contribution is clipped at $1.2\times0.7=0.84$. In particular, $1.162$ is not an estimated task-success probability.
 
 \subsection{Why the ratio is a surrogate}
 A flow loss can be related to a variational lower bound on log likelihood, but the relationship depends on the noise schedule, prediction parameterization and loss weighting. The gap between a bound and the corresponding likelihood can change during training. Thus an exponentiated loss difference is not an exact likelihood ratio. Finite noise sampling adds estimation error, and changing the loss normalization changes the exponent. Appendix~\ref{app:bounds} develops the argument and defines the evidence lower bound (ELBO). The operational rule is simple: retain the word \emph{surrogate}, record the loss convention, and verify improvement outside the training objective.
@@ -258,8 +258,8 @@ FPO supplies an update mechanism, but it does not decide how the learned environ
 \subsection{RISE: a fixed learned environment during policy improvement}
 RISE combines a dynamics model with a progress/value model. It warms up the policy on real experience, then produces imagined data labeled with advantages for advantage-conditioned flow training. Its dynamics and value models remain frozen during the self-improvement loop~\citep{rise}. This fixes the learned environment while the policy changes, making the loop easier to analyze but leaving model errors available for exploitation.
 
-\conceptfigure{rise-components}{Prediction and evaluation can fail separately}{A progress estimate describes the predicted event; it does not independently prove that event was physically possible. Conceptual connection: \citep{rise}.}{fig:rise-components}
-\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2602.11075v2}{Figure~4 in the original paper}~\citep{rise} alongside this conceptual diagram.
+\conceptfigure{rise-components}{Prediction and evaluation can fail separately}{A progress estimate describes the predicted event; it does not independently prove that event was physically possible~\citep{rise}.}{fig:rise-components}
+\noindent See \citet{rise}, \href{https://arxiv.org/pdf/2602.11075v2}{Figure~4}.
 
 
 Let $\mathcal V_{\mathrm{RISE}}$ denote RISE's task-conditioned progress/value predictor. Its chunk score $\widehat{\mathcal A}_{\mathrm{RISE}}$ averages predicted score changes from the initial observation across $H$ future observations. In our notation,
@@ -271,22 +271,22 @@ Let $\mathcal V_{\mathrm{RISE}}$ denote RISE's task-conditioned progress/value p
 \end{equation}
 It discretizes advantages into conditioning bins and requests the preferred bin when sampling. The progress/value model combines temporal-progress supervision with TD learning. This operational chunk advantage should not be silently equated with every textbook advantage estimator, and its score is not automatically a calibrated success probability. The reported implementation limits consecutive imagined interactions to two to constrain accumulated error~\citep{rise}.
 
-\conceptfigure{rise-loop}{Improve behavior in a fixed learned environment}{The quality condition enters supervised action learning. This is distinct from the flow-loss ratio used by FPO. Conceptual connection: \citep{rise}.}{fig:rise-loop}
-\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2602.11075v2}{Figure~5 in the original paper}~\citep{rise} alongside this conceptual diagram.
+\conceptfigure{rise-loop}{Improve behavior in a fixed learned environment}{The quality condition enters supervised action learning. This is distinct from the flow-loss ratio used by FPO~\citep{rise}.}{fig:rise-loop}
+\noindent See \citet{rise}, \href{https://arxiv.org/pdf/2602.11075v2}{Figure~5}.
 
 
 For the cup, short imagination may ask whether an approach and close sequence improves the predicted situation. Keeping rollouts short reduces how much generated history feeds back into itself, but it may cut off the eventual slip or release failure. A value model can estimate what follows the cutoff, yet that simply moves part of the approximation burden into the value estimate. Short horizons and bootstrapping are complementary design choices, not independent guarantees of reliability.
 
 \FloatBarrier
-\conceptfigure{vlaw-teaser}{Branch from observed experience}{More generated samples are useful only if their consequences and labels are reliable. Quantity does not turn prediction into observation. Conceptual connection: \citep{vlaw}.}{fig:vlaw-teaser}
-\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2602.12063v2}{Figure~1 in the original paper}~\citep{vlaw} alongside this conceptual diagram.
+\conceptfigure{vlaw-teaser}{Branch from observed experience}{More generated samples are useful only if their consequences and labels are reliable. Quantity does not turn prediction into observation~\citep{vlaw}.}{fig:vlaw-teaser}
+\noindent See \citet{vlaw}, \href{https://arxiv.org/pdf/2602.12063v2}{Figure~1}.
 
 
 \subsection{VLAW: refresh the simulator with real successes and failures}
 VLAW alternates real rollout collection, world-model adaptation, synthetic generation, filtering, and policy training. It refreshes Ctrl-World using accumulated real successes and failures mixed with DROID. The reported reward model is fine-tuned on first-iteration real success labels. Policy training uses successful real trajectories plus synthetic trajectories accepted by the reward model~\citep{vlaw}. This is success-filtered flow-matching training, not FPO or an obligatory separate TD-critic update.
 
-\conceptfigure{vlaw}{A failure can teach the dynamics}{A failed grasp is useful evidence for the world model even when it is excluded from positive-only policy imitation. Conceptual connection: \citep{vlaw}.}{fig:vlaw}
-\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2602.12063v2}{Figure~3 in the original paper}~\citep{vlaw} alongside this conceptual diagram.
+\conceptfigure{vlaw}{A failure can teach the dynamics}{A failed grasp is useful evidence for the world model even when it is excluded from positive-only policy imitation~\citep{vlaw}.}{fig:vlaw}
+\noindent See \citet{vlaw}, \href{https://arxiv.org/pdf/2602.12063v2}{Figure~3}.
 
 
 Real failures are particularly valuable for a world model trained mainly on successful demonstrations. An early-close cup attempt teaches that the cup may remain on the table while the gripper rises. This negative outcome is a valid dynamics target even though it is not a successful policy demonstration. The same episode can therefore belong in the dynamics dataset and be excluded from positive-only policy training. Data utility depends on which model is being trained.
@@ -306,7 +306,7 @@ These systems suggest several possible integration choices. One could begin with
 
 \section{The false-success trap and the evidence that breaks it}
 \subsection{An impossible grasp can look successful}
-Return to the early-close failure. Suppose the generated video depicts the cup attaching to the gripper even though the fingers miss it. The cup then appears upright on the coaster. A task evaluator may correctly recognize that the \emph{depicted final scene} satisfies the task while the video is wrong about the consequences of the actions. An optimistic reward model may accept the sample and training may reinforce the associated behavior. This is an illustrative failure mechanism, not a claim about a particular published trial.
+Return to the early-close failure. Suppose the generated video depicts the cup attaching to the gripper even though the fingers miss it. The cup then appears upright on the coaster. A task evaluator may correctly recognize that the \emph{depicted final scene} satisfies the task while the video is wrong about the consequences of the actions. An optimistic reward model may accept the sample and training may reinforce the associated behavior.
 
 Two questions must therefore remain distinct. Does the observed or depicted outcome satisfy the task? And is the predicted future consistent with what those actions could cause from that initial state? A visual outcome label answers the first question more directly than the second. The second requires action-aligned evidence and may remain uncertain even after careful video inspection. A generated trajectory is not a measured transition.
 
@@ -364,7 +364,7 @@ The learning loop can now be stated with explicit interfaces. Demonstration cont
 \draw[arr] (score)--(update);\draw[arr] (update)--(eval);
 \node[draw=ink,dashed,align=center,text width=142mm,font=\small,below=10mm of update] (real) {Observed real futures correct dynamics; independently checked labels correct evaluators.\\Unverified synthetic successes are withheld from policy training.};
 \end{tikzpicture}
-\caption{Original synthesis schematic for the proposed learning loop. It connects ideas from the cited methods; it is not a reproduced architecture or evidence of an implemented system. Arrows show information flow, not a gradient path through the world model.}
+\caption{A possible learning loop combining the components developed in this chapter. Arrows show information flow; the policy update uses stored experience rather than gradients through the world model.}
 \label{fig:proposed}
 \end{figure}
 

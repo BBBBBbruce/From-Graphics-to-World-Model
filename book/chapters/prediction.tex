@@ -4,7 +4,7 @@
 
 The cup example in Chapter~\ref{ch:story} established a complete learning loop. Now make the task less forgiving. A gripper holds a connector just above its socket. The camera suggests that the parts are aligned, but the connector could be tilted, the cable could be pulling sideways, or one edge could already be touching the fixture. The next command is only a small movement. Its consequence could be insertion, harmless contact, or a jam.
 
-The question is no longer simply whether we can generate the next image. It is whether a compact model preserves enough information to distinguish actions that matter. We will answer it in stages: give controls a precise meaning, identify the information available before execution, choose a representation, and expose contact errors. The equations and connector examples in this chapter are teaching constructions unless a paper is explicitly named.
+The question is no longer simply whether we can generate the next image. It is whether a compact model preserves enough information to distinguish actions that matter. We will answer it in stages: give controls a precise meaning, identify the information available before execution, choose a representation, and expose contact errors.
 
 \section{First decide what question the model answers}
 A predictive world model answers a conditional question: given what we have observed and a specified action, what might happen? A policy answers a different question: given what we have observed and want to achieve, what action should we choose? A system may share features between these functions, but their interfaces remain different.
@@ -33,7 +33,7 @@ Suppose the command is a tool-frame displacement $\Delta\mathbf p^{\mathrm T}=(0
 \end{equation}
 A tilted tool can move diagonally in base coordinates even though only the third entry of the local displacement is nonzero. By contrast, a base-frame command $(0,0,0.002)$ moves along the base's third coordinate axis. The translation of the tool origin is absent from Equation~\eqref{eq:middle-frame} because it transforms a displacement vector; transforming a point would also require translation.
 
-If $0.002$ instead means metres per second, applying it for $0.1$ seconds produces a nominal displacement of $0.0002$ metres. This tenfold difference is illustrative arithmetic, not a robot specification. A model cannot recover the intended interpretation from a normalized number alone. Normalization constants must therefore travel with the action schema.
+If $0.002$ instead means metres per second, applying it for $0.1$ seconds produces a nominal displacement of $0.0002$ metres. The requested displacement differs by a factor of ten. A model cannot recover the intended interpretation from a normalized number alone. Normalization constants must therefore travel with the action schema.
 
 The applied motion also depends on the controller. A compliant controller may yield at contact while another controller tracks the same target more rigidly. Let $\kappa$ collect controller and environment settings, $\Delta t$ be the physical interval, and $F_{\Delta t}$ be a physical transition map over that interval. Let $\mathcal O$ map physical state to an observation. Process and observation errors are denoted by $\varepsilon_t^{s}$ and $\varepsilon_t^{o}$:
 \begin{equation}
@@ -54,7 +54,7 @@ The integer $t$ indexes control steps. Let $t_{\mathrm{phys},t}$ be the physical
 \draw[->,thick] (obs)--(act);\draw[->,thick] (act)--(next);
 \node[below=8mm of act,align=center,text width=130mm] {Prediction is issued before the rightmost observation exists.\\A later frame may supervise training; it cannot be a deployment input.};
 \end{tikzpicture}
-\caption{Original timing diagram for our connector example. Physical time $\Delta t$ is separate from the noise or integration coordinate inside a generative sampler.}
+\caption{Observation and action timing. Physical time $\Delta t$ is separate from the noise or integration coordinate inside a generative sampler.}
 \label{fig:middle-timing}
 \end{figure}
 
@@ -63,9 +63,9 @@ A policy might propose ten controls but execute only two before observing again.
 \section{Learn from future frames without needing them at deployment}
 Video provides abundant evidence of change, but a change is not the same as a command. Seeing a connector move into a socket tells us both about the gripper motion and about the object's response. An encoder trained to compress the entire transition can hide both in its latent action. Such a code can reconstruct a future extremely well while being hard to predict from a robot command.
 
-\conceptfigure{middle-skelam}{Keep tomorrow out of today's inputs}{A training encoder may inspect the future. The deployed action adapter must use information available before execution. Conceptual connection: \citep{skelam}.}{fig:middle-skelam}
+\conceptfigure{middle-skelam}{Keep tomorrow out of today's inputs}{A training encoder may inspect the future. The deployed action adapter must use information available before execution~\citep{skelam}.}{fig:middle-skelam}
 
-\paperfigure{skelam-overview.pdf}{Training information and deployment inputs. Figure~1 from \citet{skelam}, arXiv:2610.31474v1. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}. Extracted from the paper page; original figure content and notation retained.}{paper:skelam-overview}{Compare the transition-encoding branch with the robot-action adapter. Future observations can supervise representation learning, but the deployed adapter must produce its condition before the future is observed.}
+\paperfigure{skelam-overview.pdf}{Training information and deployment inputs. Figure~1 from \citet{skelam}. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}.}{paper:skelam-overview}{Compare the transition-encoding branch with the robot-action adapter. Future observations can supervise representation learning, but the deployed adapter must produce its condition before the future is observed.}
 
 
 SkeLAM separates skeleton-grounded kinematic information from residual visual transition information. Skeleton supervision and swap reconstruction encourage compatible motion representations; branch dropout reduces dependence on future-derived conditions. A robot-action adapter supplies the kinematic condition, with a null residual at inference~\citep[Sec.~3 and App.~B]{skelam}. Its Appendix C.3 evaluates recorded-action open-loop replay: 105 episodes, only nine real successes. This provides evidence about prediction and ranking on that dataset; it does not test closed-loop policy improvement.
@@ -92,10 +92,10 @@ Let $E_\alpha$ be an observation encoder with parameters $\alpha$, $D_\beta$ a d
                     \operatorname{sg}(E_\alpha(o_{t+1}))\big).
  \label{eq:middle-latent}
 \end{align}
-The expectations are over training observations and aligned transitions. The encoder and decoder are fixed in the second stage. These are teaching objectives, not the exact consistency losses of the following paper. A stochastic predictor can replace $P_\phi$ when multiple futures matter. Distance in a learned latent space is not inherently a calibrated physical distance.
+The expectations are over training observations and aligned transitions. The encoder and decoder are fixed in the second stage. IWS uses a different consistency-training objective. A stochastic predictor can replace $P_\phi$ when multiple futures matter. Distance in a learned latent space is not inherently a calibrated physical distance.
 
-\conceptfigure{middle-iws}{Compression can erase the decision}{Inspect whether the representation preserves the small geometric feature that separates a safe push from a jam. Conceptual connection: \citep{iws}.}{fig:middle-iws}
-\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2603.08546v1}{Figure~2 in the original paper}~\citep{iws} alongside this conceptual diagram.
+\conceptfigure{middle-iws}{Compression can erase the decision}{Inspect whether the representation preserves the small geometric feature that separates a safe push from a jam~\citep{iws}.}{fig:middle-iws}
+\noindent See \citet{iws}, \href{https://arxiv.org/pdf/2603.08546v1}{Figure~2}.
 
 
 Interactive World Simulator trains a compact image autoencoder with a consistency decoder, freezes it, and learns action-conditioned latent consistency dynamics. Its task-specific setup includes default $128\times128$ imagery and restricted action spaces for some tasks. Interactive demonstrations exceeding ten minutes and the quantitative 192-step, 19.2-second prediction evaluation are distinct evidence. Its Dreamer 4 comparison uses a community implementation trained from scratch~\citep[Secs.~III-B and IV-A--B]{iws}. These conditions matter before transferring a speed claim to another model or task.
@@ -133,9 +133,9 @@ This balance omits details such as the integration of positions and the solution
 
 A learned predictor need not contain a finite element method (FEM) solver. The mechanical view instead identifies what its transition map must represent: geometry, material response, boundary conditions, and contact. Predicting a finite-time state change directly does not automatically preserve the constraints or conservation properties of a numerical solver. Learning from a simulator also does not establish that the simulator's materials match the physical connector.
 
-\conceptfigure{middle-contact}{Three geometric outcomes}{Original connector cross-sections show why small alignment errors matter. Explicit state prediction exposes geometric quantities for checking; it also requires appropriate geometry and state information. Conceptual connection: \citep{worldcontact}.}{fig:middle-contact}
+\conceptfigure{middle-contact}{Three geometric outcomes}{A small alignment error can change the contact event. Explicit state prediction exposes geometric quantities for checking; it also requires appropriate geometry and state information~\citep{worldcontact}.}{fig:middle-contact}
 
-\paperfigure{worldcontact-overview.pdf}{State prediction precedes rendering. Figure~1 from \citet{worldcontact}, arXiv:2609.19600v1. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}. Extracted from the paper page; original figure content and notation retained.}{paper:worldcontact-overview}{Locate the explicit state trajectory and the later rendering step. These experiments concern deformable objects; the connector drawing in this book is a separate teaching example. State supervision makes some physical errors directly measurable.}
+\paperfigure{worldcontact-overview.pdf}{State prediction precedes rendering. Figure~1 from \citet{worldcontact}. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}.}{paper:worldcontact-overview}{Locate the explicit state trajectory and the later rendering step. The experiments concern deformable objects. State supervision makes some physical errors directly measurable.}
 
 
 WorldContact predicts explicit vertex states for deformable manipulation. Its tokenizer distinguishes spatial, topological, controllable, and environmental contacts. Training supervises positions and velocities across rollouts; a differentiable topology projection supports longer predictions. Rendering follows state prediction. Its reported state-rollout acceleration excludes rendering and disk input/output. The real bag-lifting comparison is 13/20 versus 19/20 single attempts with different training-data sets~\citep[Secs.~III--V]{worldcontact}. This is a useful contrasting representation, not a drop-in RGB model or evidence of connector performance.
