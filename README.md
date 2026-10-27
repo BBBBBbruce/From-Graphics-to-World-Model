@@ -6,7 +6,11 @@ A rendered scene tells us what the world looks like. A world model asks what an 
 
 **[Read the book (PDF)](docs/from-graphics-to-world-model.pdf)** · **[Symbol reference](docs/symbols.pdf)** · [Editable LaTeX](book/main.tex)
 
-The book assumes **at least third-year undergraduate foundations** in linear algebra, multivariable calculus, probability, basic machine learning, and Python. That is the prerequisite, not a limit on depth: the text develops research-paper mechanisms, derivations, assumptions, and comparisons. The opening refresher can be read selectively.
+## Who this book is for
+
+This book is for **students and professionals with a background in computer graphics, physics, mathematics, or a related quantitative field who want to move into robotics**. It focuses on **world models for robot learning** and helps readers connect what they already know to the field, understand current research, and choose further learning or research directions.
+
+The prerequisite is knowledge comparable to **at least third-year undergraduate study**: linear algebra, multivariable calculus, probability, basic machine learning, and Python. Equivalent preparation through professional work or self-study is equally suitable; prior robotics experience is not required. The book develops research-paper mechanisms, derivations, assumptions, and comparisons. The opening refresher can be read selectively.
 
 ## The path
 
