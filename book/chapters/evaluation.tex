@@ -25,6 +25,8 @@ The desired return is defined in the real environment. The imagined return is de
 Each training stage adds a different kind of evidence. Unlabeled video can supervise temporal prediction. Action-aligned video adds control semantics. Task rewards say which outcomes matter. None of these alone supplies a policy that is better than the behavior in the dataset.
 
 \conceptfigure{middle-dreamer}{Three training questions}{Dynamics, task feedback, and policy improvement have distinct targets, even when they share a network. Conceptual connection: \citep{dreamer4}.}{fig:middle-dreamer}
+\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2509.24527v1}{Figure~2 in the original paper}~\citep{dreamer4} alongside this conceptual diagram.
+
 
 Dreamer 4 gives a concrete staged example: pretrain tokenizer and dynamics; fine-tune with task inputs, policy and reward heads while retaining prediction training; then update policy and value heads on imagined experience with the transformer frozen. Agent tokens attend to other modalities, but the reverse attention is blocked, preventing direct task-token influence on dynamics. Its main policy update uses a variant of preference-based maximum a posteriori policy optimization (PMPO), using advantage signs with a behavioral prior~\citep{pmpo}. Shortcut training is a different objective. The principal evidence is Minecraft, not physical manipulation~\citep[Alg.~1 and Sec.~3.3]{dreamer4}.
 
@@ -115,6 +117,9 @@ These cases separate three questions: whether the future is well predicted, whet
 
 \conceptfigure{middle-hawmpo}{A score for success needs a score for reliability}{The reliability assessor is another fallible learned component. Its supervision and errors need their own evaluation. Conceptual connection: \citep{hawmpo}.}{fig:middle-hawmpo}
 
+\paperfigure{hawmpo-overview.pdf}{Task reward meets a reliability estimate. Figure~1 from \citet{hawmpo}, arXiv:2609.09941v1. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}. Extracted from the paper page; original figure content and notation retained.}{paper:hawmpo-overview}{Follow task reward and hallucination assessment into the policy-learning feedback. In this source diagram, $H$ denotes the role of our $u_{\mathrm{hall}}$, $R$ our $\widehat r$, and adjusted $\widehat R$ our $\widetilde r$. Its $\widehat A$ is an estimated advantage, written $\widehat{\mathcal A}$ here; its world-model $M_\theta$ plays the role of our $p_\phi$.}
+
+
 HaWMPO learns a hallucination assessor from generated-versus-observed futures using feature, depth, motion, and image-quality proxies. At rollout time it uses generated frames, actions, and context without the observed future. Its assessor audit uses 50 LIBERO chunks; physical evaluation covers two tasks with 20 trials per method per task~\citep[Secs.~3 and 4.3--4.6]{hawmpo}. These proxy labels and small samples limit the evidence for reliability.
 
 In the book's notation, let $u_{\mathrm{hall}}\in[0,1]$ be the estimated hallucination severity and $\chi$ the penalty strength. Let $\widehat r$ be the raw predicted chunk reward and $\widetilde r$ the adjusted reward. HaWMPO's reward-softening rule is
@@ -140,6 +145,8 @@ For insertion, uncertainty about a hidden latch suggests requesting an observati
 The most useful external test begins with a question the model could get wrong. Fix a recorded initial history and its applied actions, generate the future, and compare with independently observed consequences. This removes the policy's freedom to change the test while we measure prediction.
 
 \conceptfigure{middle-oracle}{Hold the action fixed}{This comparison tests consequences. It does not let a new policy choose different actions or establish policy improvement. Conceptual connection: \citep{worldoracle}.}{fig:middle-oracle}
+\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2610.18826v4}{Figure~1 in the original paper}~\citep{worldoracle} alongside this conceptual diagram.
+
 
 WorldOracle evaluates recorded-action futures against real executions along outcome correctness, spatial alignment, interaction-region fidelity, and multiview action coherence. Its outcome score uses a VLM; the multiview metric aggregates reference-grounded arm alignment rather than directly proving 3D consistency. Limited task/embodiment coverage, single-reference ambiguity, and unequal adaptation conditions constrain comparisons~\citep[Sec.~3 and App.~F]{worldoracle}. Its paired evidence can expose false predicted success, but does not by itself establish closed-loop policy improvement.
 

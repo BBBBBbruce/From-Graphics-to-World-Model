@@ -1,0 +1,86 @@
+[
+  {
+    "file": "book/figures/papers/synthicl-teaser.pdf",
+    "paper_key": "synthicl",
+    "figure_number": "1",
+    "source_url": "https://arxiv.org/abs/2606.08154v1",
+    "version": "2606.08154v1",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "modifications": "Figure region extracted from the paper page; original figure content and notation retained.",
+    "verified_on": "2026-10-27",
+    "sha256": "2af5544e89b0f36839f82f8ee7102be21f19ef0ecadd60a8c94b0e1fc27b3214"
+  },
+  {
+    "file": "book/figures/papers/synthicl-architecture.pdf",
+    "paper_key": "synthicl",
+    "figure_number": "2",
+    "source_url": "https://arxiv.org/abs/2606.08154v1",
+    "version": "2606.08154v1",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "modifications": "Figure region extracted from the paper page; original figure content and notation retained.",
+    "verified_on": "2026-10-27",
+    "sha256": "70e4dd1d8ae5f68271abdfa002853928b8ea45dc27a5877d67cdd0521da07501"
+  },
+  {
+    "file": "book/figures/papers/weaver-architecture.pdf",
+    "paper_key": "weaver",
+    "figure_number": "2",
+    "source_url": "https://arxiv.org/abs/2606.13672v2",
+    "version": "2606.13672v2",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "modifications": "Figure region extracted from the paper page; original figure content and notation retained.",
+    "verified_on": "2026-10-27",
+    "sha256": "ebcb11e9acb2a9201cdc3fd5245b43a487db3dc55d36027fab0b850825a97501"
+  },
+  {
+    "file": "book/figures/papers/fpo-multimodal.pdf",
+    "paper_key": "fpo",
+    "figure_number": "1",
+    "source_url": "https://arxiv.org/abs/2507.21053v2",
+    "version": "2507.21053v2",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "modifications": "Figure region extracted from the paper page; original figure content and notation retained.",
+    "verified_on": "2026-10-27",
+    "sha256": "f232d30f73cad3b4b7b6b263d77b2d8db47e05a186fd65baac1198cdf2676ed1"
+  },
+  {
+    "file": "book/figures/papers/skelam-overview.pdf",
+    "paper_key": "skelam",
+    "figure_number": "1",
+    "source_url": "https://arxiv.org/abs/2610.31474v1",
+    "version": "2610.31474v1",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "modifications": "Figure region extracted from the paper page; original figure content and notation retained.",
+    "verified_on": "2026-10-27",
+    "sha256": "b7fa12ae21333dac7c1bd5e07b3f24f0527039c3b070b4ed532ea1250abfcbee"
+  },
+  {
+    "file": "book/figures/papers/worldcontact-overview.pdf",
+    "paper_key": "worldcontact",
+    "figure_number": "1",
+    "source_url": "https://arxiv.org/abs/2609.19600v1",
+    "version": "2609.19600v1",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "modifications": "Figure region extracted from the paper page; original figure content and notation retained.",
+    "verified_on": "2026-10-27",
+    "sha256": "e2f5b292eda2db12a52a8dcaad05e3104d27043884030e4f1020cb8b055a11d2"
+  },
+  {
+    "file": "book/figures/papers/hawmpo-overview.pdf",
+    "paper_key": "hawmpo",
+    "figure_number": "1",
+    "source_url": "https://arxiv.org/abs/2609.09941v1",
+    "version": "2609.09941v1",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "modifications": "Figure region extracted from the paper page; original figure content and notation retained.",
+    "verified_on": "2026-10-27",
+    "sha256": "d6a4596e82fe15a2d53de7de593379012d75575c8ad896cf170857d7094d54fb"
+  }
+]

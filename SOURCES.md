@@ -1,6 +1,6 @@
 # Primary sources and verification record
 
-Edition 1.0, prepared 27 October 2026. The bibliography records the inspected versions; links below point to primary papers, author project pages, or official documentation. Conference/journal years and preprint revision years have different meanings. Results are scoped to the cited protocol rather than treated as universal capabilities.
+Edition 1.1, revised 27 October 2026. The bibliography records the inspected versions; links below point to primary papers, author project pages, or official documentation. Conference/journal years and preprint revision years have different meanings. Results are scoped to the cited protocol rather than treated as universal capabilities.
 
 ## Foundation and graphics
 
@@ -41,6 +41,6 @@ Edition 1.0, prepared 27 October 2026. The bibliography records the inspected ve
 
 ## Teaching constructions and reproduction
 
-The cup and connector examples, diagrams, arithmetic, proposed research questions, and one-dimensional deadband experiment are teaching constructions. The code and equation define the toy result; no paper is cited as having performed that experiment. Proposed combinations of components are not attributed to a published implementation.
+The cup and connector examples, original teaching diagrams, arithmetic, proposed research questions, and one-dimensional deadband experiment are teaching constructions. The code and equation define the toy result; no paper is cited as having performed that experiment. Proposed combinations of components are not attributed to a published implementation.
 
-All public figures were authored for this edition. No paper figure or research PDF is redistributed. See [NOTICE.md](NOTICE.md). The official [CC BY-NC 4.0 legal code](https://creativecommons.org/licenses/by-nc/4.0/legalcode) and [MIT License](https://opensource.org/license/mit) determine the reuse terms; educational intent alone is not permission to copy external content.
+The public edition combines original teaching diagrams with seven paper figures whose inspected versions publish a CC BY 4.0 license. Their individual credits and license checks appear in [FIGURES.md](FIGURES.md); the other research figures are linked. No complete research PDF is redistributed. See [NOTICE.md](NOTICE.md). The official [CC BY-NC 4.0 legal code](https://creativecommons.org/licenses/by-nc/4.0/legalcode) and [MIT License](https://opensource.org/license/mit) determine the reuse terms; educational intent alone is not permission to copy external content.

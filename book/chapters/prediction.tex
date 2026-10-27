@@ -65,6 +65,9 @@ Video provides abundant evidence of change, but a change is not the same as a co
 
 \conceptfigure{middle-skelam}{Keep tomorrow out of today's inputs}{A training encoder may inspect the future. The deployed action adapter must use information available before execution. Conceptual connection: \citep{skelam}.}{fig:middle-skelam}
 
+\paperfigure{skelam-overview.pdf}{Training information and deployment inputs. Figure~1 from \citet{skelam}, arXiv:2610.31474v1. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}. Extracted from the paper page; original figure content and notation retained.}{paper:skelam-overview}{Compare the transition-encoding branch with the robot-action adapter. Future observations can supervise representation learning, but the deployed adapter must produce its condition before the future is observed.}
+
+
 SkeLAM separates skeleton-grounded kinematic information from residual visual transition information. Skeleton supervision and swap reconstruction encourage compatible motion representations; branch dropout reduces dependence on future-derived conditions. A robot-action adapter supplies the kinematic condition, with a null residual at inference~\citep[Sec.~3 and App.~B]{skelam}. Its Appendix C.3 evaluates recorded-action open-loop replay: 105 episodes, only nine real successes. This provides evidence about prediction and ranking on that dataset; it does not test closed-loop policy improvement.
 
 To isolate the general issue, let $E_{\mathrm{tr}}$ be a fixed transition encoder and $z^\star=E_{\mathrm{tr}}(o_t,o_{t+1})$ its latent training target. Let $f_\omega$ be an action adapter with parameters $\omega$, producing $\widetilde z=f_\omega(h_t,a_t)$ before the future is known. On an aligned dataset $\mathcal D$, a simple adapter loss is
@@ -92,6 +95,8 @@ Let $E_\alpha$ be an observation encoder with parameters $\alpha$, $D_\beta$ a d
 The expectations are over training observations and aligned transitions. The encoder and decoder are fixed in the second stage. These are teaching objectives, not the exact consistency losses of the following paper. A stochastic predictor can replace $P_\phi$ when multiple futures matter. Distance in a learned latent space is not inherently a calibrated physical distance.
 
 \conceptfigure{middle-iws}{Compression can erase the decision}{Inspect whether the representation preserves the small geometric feature that separates a safe push from a jam. Conceptual connection: \citep{iws}.}{fig:middle-iws}
+\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2603.08546v1}{Figure~2 in the original paper}~\citep{iws} alongside this conceptual diagram.
+
 
 Interactive World Simulator trains a compact image autoencoder with a consistency decoder, freezes it, and learns action-conditioned latent consistency dynamics. Its task-specific setup includes default $128\times128$ imagery and restricted action spaces for some tasks. Interactive demonstrations exceeding ten minutes and the quantitative 192-step, 19.2-second prediction evaluation are distinct evidence. Its Dreamer 4 comparison uses a community implementation trained from scratch~\citep[Secs.~III-B and IV-A--B]{iws}. These conditions matter before transferring a speed claim to another model or task.
 
@@ -129,6 +134,9 @@ This balance omits details such as the integration of positions and the solution
 A learned predictor need not contain a finite element method (FEM) solver. The mechanical view instead identifies what its transition map must represent: geometry, material response, boundary conditions, and contact. Predicting a finite-time state change directly does not automatically preserve the constraints or conservation properties of a numerical solver. Learning from a simulator also does not establish that the simulator's materials match the physical connector.
 
 \conceptfigure{middle-contact}{Three geometric outcomes}{Original connector cross-sections show why small alignment errors matter. Explicit state prediction exposes geometric quantities for checking; it also requires appropriate geometry and state information. Conceptual connection: \citep{worldcontact}.}{fig:middle-contact}
+
+\paperfigure{worldcontact-overview.pdf}{State prediction precedes rendering. Figure~1 from \citet{worldcontact}, arXiv:2609.19600v1. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}. Extracted from the paper page; original figure content and notation retained.}{paper:worldcontact-overview}{Locate the explicit state trajectory and the later rendering step. These experiments concern deformable objects; the connector drawing in this book is a separate teaching example. State supervision makes some physical errors directly measurable.}
+
 
 WorldContact predicts explicit vertex states for deformable manipulation. Its tokenizer distinguishes spatial, topological, controllable, and environmental contacts. Training supervises positions and velocities across rollouts; a differentiable topology projection supports longer predictions. Rendering follows state prediction. Its reported state-rollout acceleration excludes rendering and disk input/output. The real bag-lifting comparison is 13/20 versus 19/20 single attempts with different training-data sets~\citep[Secs.~III--V]{worldcontact}. This is a useful contrasting representation, not a drop-in RGB model or evidence of connector performance.
 

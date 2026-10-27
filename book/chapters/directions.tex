@@ -7,7 +7,7 @@ A policy chooses actions; dynamics predicts consequences; rewards define what ma
 Start with a system whose inputs, commands, and outcomes you understand. Increase complexity when the simple experiment can no longer answer your question.
 
 \section{A complete experiment on a laptop}
-The repository includes \texttt{examples/one\_dimensional\_world.py}. It models a one-dimensional slider with a command deadband. Here $s_t$ is position in metres and $a_t$ is a requested displacement in metres over a fixed control interval. The setting $\kappa\geq0$ is a deadband width in metres: commands whose magnitude does not exceed it produce no motion. Define $\operatorname{sign}(a)$ to be $-1$, 0, or 1 according to whether $a$ is negative, zero, or positive. The transition is
+As a controlled warm-up before a paper-level experiment, the repository includes \nolinkurl{examples/one_dimensional_world.py}. It models a one-dimensional slider with a command deadband. Here $s_t$ is position in metres and $a_t$ is a requested displacement in metres over a fixed control interval. The setting $\kappa\geq0$ is a deadband width in metres: commands whose magnitude does not exceed it produce no motion. Define $\operatorname{sign}(a)$ to be $-1$, 0, or 1 according to whether $a$ is negative, zero, or positive. The transition is
 \begin{equation}
  s_{t+1}=s_t+\operatorname{sign}(a_t)\max(|a_t|-\kappa,0).
  \label{eq:toy-transition}
@@ -71,6 +71,31 @@ For a control-oriented reader, the toy deadband is a starting point for system i
 For an evaluation-oriented reader, construct a small set of outcomes whose labels require different evidence. A cup can look held while resting on a support; a connector can look seated without electrical continuity. State what each sensor can establish. Evaluate false accepted successes and missed true successes separately. The result may be a clear measurement limitation rather than a new model, and that limitation can prevent misleading learning claims.
 
 Only choose the optimization direction after the targets are credible. If every failed grasp is labeled successful, a better optimizer may learn the wrong behavior faster. Compare a simple filtering baseline with a more complex update under the same data and scorer. If the complex method helps, investigate which change caused it; do not change the dynamics, data budget, and optimizer simultaneously and attribute the difference to the optimizer alone.
+
+\section{Move from a toy result to a paper-level experiment}
+The slider makes a failure interpretable because its transition law is known. A research model removes that convenience: its representation, action adapter, uncertainty, and evaluator can all fail at once. The next experiment should isolate one of these changes. Moving directly from the slider to a large pretrained model would change too many assumptions to explain the result.
+
+\subsection{Representation is a hypothesis about sufficient information}
+Compare the visual-latent route in IWS and WEAVER with explicit state prediction in WorldContact~\citep{iws,weaver,worldcontact}. These are not interchangeable implementations of the same input contract. A visual predictor begins with measured images; an explicit-state predictor needs the geometry and state information required by its representation. A meaningful comparison first identifies what is available at deployment and what is supplied only by training supervision.
+
+A controlled study could fix recorded actions and a set of near-contact decisions, then evaluate a visual latent with and without additional geometric supervision. Measure both the retained geometric distinction and the resulting action ranking. Keep additional labels and compute visible in the comparison. If geometry helps only when an unavailable simulator state is supplied at deployment, the result supports that privileged setting rather than a camera-only controller.
+
+\subsection{Context must explain either intention or physical response}
+SynthICL's demonstration context $C$ explains the intended task, while physical context $C_{\mathrm{dyn}}$ would supply evidence about the transition law~\citep{synthicl}. These roles can coexist, but they require different supervision. A demonstration placing a cup on a different coaster changes the desired behavior. An earlier push revealing a slippery surface changes the estimated consequence of a fixed command. Neither should be silently substituted for the other.
+
+A study of physical context can fix the task and action convention, vary physical settings across episodes, and ask whether a short observed interaction improves predictions in the same episode. Separate interpolation among trained settings from extrapolation to unseen settings. Compare against a predictor without context and a reference given the true setting. The reference measures the value of missing information; it is not a deployable baseline if that information is unavailable. A context encoder that memorizes scene appearance may perform well on a random frame split and fail on a new material or controller.
+
+\subsection{A learning-loop comparison needs matched evidence}
+RISE, VLAW, and FPO answer different parts of the learning problem. RISE illustrates advantage-conditioned improvement inside a fixed learned environment; VLAW refreshes the model with real experience and uses success-filtered policy training; FPO specifies a flow-loss-based policy update~\citep{rise,vlaw,fpo}. Treating their published headline results as an optimizer ranking would mix task, model, data, and feedback differences.
+
+For a comparison of update rules, begin with the same policy initialization, observed-data budget, frozen dynamics, and evaluator. Specify whether the methods receive the same stored trajectories or each collects fresh ones: the latter changes both the data distribution and the update. A fixed-data comparison tests what an update extracts from given experience; an iterative comparison tests the entire collection-and-learning loop. Report both only if both are actually evaluated.
+
+For FPO, reproduce the noise/time convention, dimensional reduction, clipping, and behavior-policy snapshots before interpreting a result. Then compare with a simpler filtering or conditioning baseline using independent outcomes. If the candidate improves only the same evaluator that generated its training labels, the central improvement claim remains unresolved. Appendix~\ref{app:bounds} explains why a plausible loss-ratio derivation cannot close that evidence gap.
+
+\subsection{Read a figure as an experimental specification}
+An architecture figure is a compact set of claims about information flow. For every arrow, identify its tensor, timing, units where applicable, and availability during training and deployment. For every box, identify the parameters updated by each objective. For a result plot, identify the independent unit, baseline, data budget, and uncertainty. Our flowcharts summarize the argument; the reproduced paper figures let you check it against the authors' actual presentation.
+
+End a paper reproduction with an explicit boundary: which equation, component, or protocol was reproduced, and which was replaced by a teaching approximation? A useful outcome may be that the reported ordering changes under a new action convention or evaluator. That is a research direction only after the comparison rules out implementation mistakes and unsupported changes in the question.
 
 \section{A two-week first pass}
 Use days one through three for Chapters~\ref{ch:foundations} and \ref{ch:policy}. Explain execution, sampling, and training without looking at the text. Run the toy example and verify one transition by hand.

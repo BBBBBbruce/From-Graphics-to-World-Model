@@ -1,9 +1,11 @@
 \chapter{World Models, Rewards, and Policy Improvement}
 \label{ch:story}
-The policy in Chapter~\ref{ch:policy} can generate actions and read demonstrations. Now it needs to compare consequences. We first construct imagined experience, then define reward and advantage, and finally derive an update. The detailed gradient and FPO sections are optional on a first reading; the later reliability argument does not require reproducing those derivations.
+The policy in Chapter~\ref{ch:policy} can generate actions and read demonstrations. Now it needs to compare consequences. We first construct imagined experience, then define reward and advantage, and finally derive an update. The gradient and FPO sections develop the update at equation level. They belong to the technical argument: the later reliability discussion depends on understanding what the objective can and cannot establish.
 
 \section{Imagining consequences with an action-conditioned world model}
 \conceptfigure{ctrl-teaser}{A generated future becomes an input}{Following the return arrow makes this a policy-in-the-loop experiment. Prediction errors can affect later decisions. Conceptual connection: \citep{ctrl}.}{fig:ctrl-teaser}
+\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2510.10125v3}{Figure~1 in the original paper}~\citep{ctrl} alongside this conceptual diagram.
+
 
 \subsection{The interface is part of the model}
 A learned dynamics model supplies a distribution over future observations or latent states. Let $p_\phi$ denote this conditional distribution, with parameters $\phi$, and let a hat mark a predicted observation. For an action chunk,
@@ -20,6 +22,8 @@ A usable interface needs a shared action convention, camera layout, time spacing
 Ctrl-World adapts a pretrained video diffusion model using joint multiview prediction, frame-level pose conditioning, and sparse pose-conditioned memory. Its described adapter converts joint-velocity commands to joint configurations and then uses forward kinematics to obtain Cartesian poses~\citep{ctrl}. These conversion steps are essential context for interpreting ``action controllability.''
 
 \conceptfigure{ctrl}{An occluded cup still has a history}{A remembered view can preserve earlier geometry. It is not a new measurement of current contact. Conceptual connection: \citep{ctrl}.}{fig:ctrl}
+\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2510.10125v3}{Figure~2 in the original paper}~\citep{ctrl} alongside this conceptual diagram.
+
 
 \subsection{Why multiple views and memory matter}
 The wrist camera can observe the grasp closely but lose sight of the destination. An external camera can show the destination while hiding the fingers behind the cup. Joint prediction lets evidence from one view constrain another. Independent plausible views are insufficient: one could show a held cup while another shows it on the table. Consistency means they describe the same underlying event, not merely that each image looks realistic.
@@ -29,6 +33,9 @@ History and memory address a related temporal ambiguity. Recent observations ind
 WEAVER predicts multiview image latents and proprioception from actions, recent history, and sparse older memory. It adds latent reward and critic heads so candidate outcomes can be scored without repeatedly decoding images for a large external judge. Its reward supervision comes from RoboMeter progress labels; the critic uses bootstrapped targets~\citep{weaver}. These heads make scoring cheaper, but do not create task truth from dynamics alone. In the inspected WEAVER version, actions are joint-position differences, with an additional velocity-to-position adapter for interfacing with other action conventions~\citep{weaver}. This differs from Ctrl-World's Cartesian-pose conditioning. An adapter must preserve timing and command meaning; matching vector dimensions is insufficient.
 
 \conceptfigure{weaver}{One representation, two uses}{Decoding and scoring serve different consumers. A low-cost score still depends on the quality of its supervision. Conceptual connection: \citep{weaver}.}{fig:weaver}
+
+\paperfigure{weaver-architecture.pdf}{Prediction and scoring inside WEAVER. Figure~2 from \citet{weaver}, arXiv:2606.13672v2. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}. Extracted from the paper page; original figure content and notation retained.}{paper:weaver-architecture}{Trace the action and history inputs into latent future prediction, then distinguish image decoding from latent reward and critic heads. A cheaper score still depends on its training labels and bootstrap targets.}
+
 
 \subsection{Two uses of prediction: choosing now and learning for later}
 Suppose the robot proposes three cup approaches. It could predict each outcome, select the most promising candidate, execute a prefix, observe again, and repeat. That is \emph{planning with a model}. The decision changes, but the policy's weights can remain fixed. Alternatively, it can retain many imagined attempts and use their scores to train a new policy. That is \emph{learning from model-generated experience}. Later decisions may improve without rerunning the same search. These are different uses of a predictive model; WEAVER investigates both planning and policy improvement~\citep{weaver}.
@@ -199,6 +206,9 @@ This is where the earlier flow-matching loss becomes useful again. We know how t
 \label{sec:fpo}
 \conceptfigure{fpo-teaser}{Keep both ways around the obstacle}{Separated valid action modes need not have a valid average. A flexible distribution can retain both; rewards must then favor useful samples. Conceptual connection: \citep{fpo}.}{fig:fpo-teaser}
 
+\paperfigure{fpo-multimodal.pdf}{Multiple useful action modes. Figure~1 from \citet{fpo}, arXiv:2507.21053v2. \href{https://creativecommons.org/licenses/by/4.0/}{CC BY 4.0}. Extracted from the paper page; original figure content and notation retained.}{paper:fpo-multimodal}{Find the starred state and compare the evolving sample distribution with the possible trajectories. This is the authors' GridWorld illustration, not a robot experiment. Its purpose here is to connect multimodal generation to policy optimization.}
+
+
 \subsection{Score a collected action with the flow model}
 Flow Policy Optimization (FPO), introduced in \emph{Flow Matching Policy Gradients}, adapts a PPO-style update to flow policies using conditional flow-matching losses~\citep{fpo}. The action used as a target is now a sampled rollout action or chunk. It need not be an expert demonstration. The external experience supplies an advantage that tells the update whether to favor or disfavor that sample.
 
@@ -249,6 +259,8 @@ FPO supplies an update mechanism, but it does not decide how the learned environ
 RISE combines a dynamics model with a progress/value model. It warms up the policy on real experience, then produces imagined data labeled with advantages for advantage-conditioned flow training. Its dynamics and value models remain frozen during the self-improvement loop~\citep{rise}. This fixes the learned environment while the policy changes, making the loop easier to analyze but leaving model errors available for exploitation.
 
 \conceptfigure{rise-components}{Prediction and evaluation can fail separately}{A progress estimate describes the predicted event; it does not independently prove that event was physically possible. Conceptual connection: \citep{rise}.}{fig:rise-components}
+\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2602.11075v2}{Figure~4 in the original paper}~\citep{rise} alongside this conceptual diagram.
+
 
 Let $\mathcal V_{\mathrm{RISE}}$ denote RISE's task-conditioned progress/value predictor. Its chunk score $\widehat{\mathcal A}_{\mathrm{RISE}}$ averages predicted score changes from the initial observation across $H$ future observations. In our notation,
 \begin{equation}
@@ -260,16 +272,22 @@ Let $\mathcal V_{\mathrm{RISE}}$ denote RISE's task-conditioned progress/value p
 It discretizes advantages into conditioning bins and requests the preferred bin when sampling. The progress/value model combines temporal-progress supervision with TD learning. This operational chunk advantage should not be silently equated with every textbook advantage estimator, and its score is not automatically a calibrated success probability. The reported implementation limits consecutive imagined interactions to two to constrain accumulated error~\citep{rise}.
 
 \conceptfigure{rise-loop}{Improve behavior in a fixed learned environment}{The quality condition enters supervised action learning. This is distinct from the flow-loss ratio used by FPO. Conceptual connection: \citep{rise}.}{fig:rise-loop}
+\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2602.11075v2}{Figure~5 in the original paper}~\citep{rise} alongside this conceptual diagram.
+
 
 For the cup, short imagination may ask whether an approach and close sequence improves the predicted situation. Keeping rollouts short reduces how much generated history feeds back into itself, but it may cut off the eventual slip or release failure. A value model can estimate what follows the cutoff, yet that simply moves part of the approximation burden into the value estimate. Short horizons and bootstrapping are complementary design choices, not independent guarantees of reliability.
 
 \FloatBarrier
 \conceptfigure{vlaw-teaser}{Branch from observed experience}{More generated samples are useful only if their consequences and labels are reliable. Quantity does not turn prediction into observation. Conceptual connection: \citep{vlaw}.}{fig:vlaw-teaser}
+\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2602.12063v2}{Figure~1 in the original paper}~\citep{vlaw} alongside this conceptual diagram.
+
 
 \subsection{VLAW: refresh the simulator with real successes and failures}
 VLAW alternates real rollout collection, world-model adaptation, synthetic generation, filtering, and policy training. It refreshes Ctrl-World using accumulated real successes and failures mixed with DROID. The reported reward model is fine-tuned on first-iteration real success labels. Policy training uses successful real trajectories plus synthetic trajectories accepted by the reward model~\citep{vlaw}. This is success-filtered flow-matching training, not FPO or an obligatory separate TD-critic update.
 
 \conceptfigure{vlaw}{A failure can teach the dynamics}{A failed grasp is useful evidence for the world model even when it is excluded from positive-only policy imitation. Conceptual connection: \citep{vlaw}.}{fig:vlaw}
+\noindent\textit{Paper companion.} See \href{https://arxiv.org/pdf/2602.12063v2}{Figure~3 in the original paper}~\citep{vlaw} alongside this conceptual diagram.
+
 
 Real failures are particularly valuable for a world model trained mainly on successful demonstrations. An early-close cup attempt teaches that the cup may remain on the table while the gripper rises. This negative outcome is a valid dynamics target even though it is not a successful policy demonstration. The same episode can therefore belong in the dynamics dataset and be excluded from positive-only policy training. Data utility depends on which model is being trained.
 
