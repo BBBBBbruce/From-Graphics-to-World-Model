@@ -6,7 +6,7 @@ By **Bruce.Z@LiftAI**
 
 A rendered scene tells us what the world looks like. A robot needs to know what will happen when it acts: whether a grasp will hold, a push will move an object, or a connector will catch on an edge. This book follows the path from scene representations to world models that can guide decisions and learning.
 
-**[Read the book](docs/from-graphics-to-world-model.pdf)**
+**[Read the book](docs/from-graphics-to-world-model.pdf)** · [Download PDF](docs/from-graphics-to-world-model.pdf?raw=true)
 
 ## Who this book is for
 
@@ -32,6 +32,8 @@ You should know linear algebra, multivariable calculus, probability, basic machi
 The accompanying Python example explores how a change in an object's response can make a previously accurate model choose poor actions. It runs on a laptop with Python 3.9 or later, without additional packages:
 
 ```sh
+git clone https://github.com/BBBBBbruce/From-Graphics-to-World-Model.git
+cd From-Graphics-to-World-Model
 python3 examples/one_dimensional_world.py --output results/toy
 ```
 
